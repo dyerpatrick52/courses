@@ -68,3 +68,15 @@ CREATE INDEX IF NOT EXISTS idx_subjects_term_id    ON subjects(term_id);
 CREATE INDEX IF NOT EXISTS idx_courses_subject_id  ON courses(subject_id);
 CREATE INDEX IF NOT EXISTS idx_sections_course_id  ON sections(course_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_section_id ON section_meetings(section_id);
+
+CREATE TABLE IF NOT EXISTS scrape_runs (
+  id               SERIAL PRIMARY KEY,
+  started_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  finished_at      TIMESTAMPTZ,
+  status           VARCHAR(20)  NOT NULL DEFAULT 'running',
+  terms_scraped    INTEGER      NOT NULL DEFAULT 0,
+  subjects_scraped INTEGER      NOT NULL DEFAULT 0,
+  courses_scraped  INTEGER      NOT NULL DEFAULT 0,
+  sections_scraped INTEGER      NOT NULL DEFAULT 0,
+  errors           JSONB        NOT NULL DEFAULT '[]'
+);
