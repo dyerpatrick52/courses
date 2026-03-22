@@ -1,78 +1,37 @@
 import { Page } from 'playwright';
-import {
-  openSubjectLookup,
-  clickSubjectLookupLetter,
-  readAllTexts,
-} from './navigation';
+
+// The uOttawa course catalogue index page. It lists every subject as a link
+// in the format "Computer Science (CSI)", from which we parse code and name.
+const CATALOGUE_INDEX_URL = 'https://catalogue.uottawa.ca/en/courses/';
 
 export interface ScrapedSubject {
   subject_code: string;
   subject_name: string;
 }
 
-const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-
-export async function scrapeSubjectsForTerm(page: Page): Promise<ScrapedSubject[]> {
-  await openSubjectLookup(page);
-
-  const allSubjects: ScrapedSubject[] = [];
-
-  for (const letter of LETTERS) {
-    const subjects = await scrapeSubjectsForLetter(page, letter);
-    allSubjects.push(...subjects);
-  }
-
-  return deduplicateSubjects(allSubjects);
+// Navigates to the catalogue index and returns all subjects listed there.
+// This is scraped once at the start of a run and reused for every term,
+// since the subject list is the same regardless of term.
+export async function scrapeSubjects(page: Page): Promise<ScrapedSubject[]> {
+  await page.goto(CATALOGUE_INDEX_URL, { waitUntil: 'networkidle' });
+  return extractSubjects(page);
 }
 
-async function scrapeSubjectsForLetter(
-  page: Page,
-  letter: string
-): Promise<ScrapedSubject[]> {
-  await clickSubjectLookupLetter(page, letter);
-
-  const codes = await readAllTexts(page, '[id^="SSR_CLSRCH_SUBJ_SUBJECT$"]');
-  const rows  = await page.$$('[id^="ACE_SSR_CLSRCH_SUBJ$"]');
-
-  return parseSubjectRows(codes, rows);
+// Finds all links on the catalogue index that point to a subject page
+// (e.g. /en/courses/csi/) but not the index itself (/en/courses/).
+// Each link's text looks like "Computer Science (CSI)".
+async function extractSubjects(page: Page): Promise<ScrapedSubject[]> {
+  const texts = await page.$$eval(
+    'a[href^="/en/courses/"]:not([href="/en/courses/"])',
+    els => els.map(el => el.textContent?.trim() ?? '')
+  );
+  return texts.map(parseSubjectText).filter((s): s is ScrapedSubject => s !== null);
 }
 
-async function parseSubjectRows(
-  codes: string[],
-  rows: Awaited<ReturnType<Page['$$']>>
-): Promise<ScrapedSubject[]> {
-  const subjects: ScrapedSubject[] = [];
-
-  for (let i = 0; i < codes.length; i++) {
-    const code = codes[i];
-    const name = await extractSubjectNameFromRow(rows[i], code);
-    if (isValidSubject(code, name)) {
-      subjects.push({ subject_code: code, subject_name: name });
-    }
-  }
-
-  return subjects;
-}
-
-async function extractSubjectNameFromRow(
-  row: Awaited<ReturnType<Page['$']>>,
-  code: string
-): Promise<string> {
-  if (!row) return '';
-  const fullText = (await row.textContent() ?? '').replace(/\s+/g, ' ').trim();
-  const match = fullText.match(new RegExp(`^${code}\\s+(.+?)\\s+Select`));
-  return match ? match[1].trim() : '';
-}
-
-function isValidSubject(code: string, name: string): boolean {
-  return code.length > 0 && name.length > 0;
-}
-
-function deduplicateSubjects(subjects: ScrapedSubject[]): ScrapedSubject[] {
-  const seen = new Set<string>();
-  return subjects.filter(s => {
-    if (seen.has(s.subject_code)) return false;
-    seen.add(s.subject_code);
-    return true;
-  });
+// Parses a link label like "Computer Science (CSI)" into a structured object.
+// Returns null if the text doesn't match the expected format.
+function parseSubjectText(text: string): ScrapedSubject | null {
+  const match = text.match(/^(.+?)\s+\(([A-Z]{2,6})\)$/);
+  if (!match) return null;
+  return { subject_name: match[1].trim(), subject_code: match[2] };
 }

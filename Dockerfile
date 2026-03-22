@@ -9,6 +9,7 @@ RUN npx playwright install chromium
 
 COPY tsconfig.json ./
 COPY src/ ./src/
+COPY test-scrape.ts ./
 
 RUN npm run build
 

@@ -6,9 +6,11 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "test:scrape": "ts-node test-scrape.ts"
   },
   "dependencies": {
+    "dotenv": "^17.3.1",
     "node-cron": "^3.0.3",
     "pg": "^8.13.1",
     "playwright": "^1.50.1"

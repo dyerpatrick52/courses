@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:catalogue.uottawa.ca)",
+      "Bash(curl -s \"https://catalogue.uottawa.ca/en/courses/phy/\")",
+      "Bash(npm run:*)",
+      "Bash(docker compose:*)"
+    ]
+  }
+}

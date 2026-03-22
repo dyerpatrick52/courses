@@ -1,73 +1,81 @@
-import { Page } from 'playwright';
-import { selectTerm, selectSubjectFromLookup, runSearch, readText } from './navigation';
+import { Page, ElementHandle } from 'playwright';
 
-export interface ScrapedCourseHeader {
-  course_code:  string;
-  course_title: string;
-  section_indices: number[];
+// The uOttawa course catalogue, one page per subject (e.g. /en/courses/csi/).
+// Each page lists every course offered under that subject with title, units,
+// description, and prerequisites.
+const CATALOGUE_BASE_URL = 'https://catalogue.uottawa.ca/en/courses';
+
+export interface ScrapedCourse {
+  course_code:   string;
+  course_title:  string;
+  units:         string;
+  description:   string;
+  prerequisites: string;
 }
 
-export async function scrapeSearchResultsForSubject(
+// Intermediate structure holding raw text before we parse it into fields.
+interface RawCourseBlock {
+  titleText:     string;
+  description:   string;
+  prerequisites: string;
+}
+
+// Navigates to the catalogue page for a subject and returns all courses on it.
+// subjectCode is lowercased to build the URL (e.g. "CSI" → /en/courses/csi/).
+export async function scrapeCoursesForSubject(
   page: Page,
-  termCode: string,
   subjectCode: string
-): Promise<ScrapedCourseHeader[]> {
-  await selectTerm(page, termCode);
-  await selectSubjectFromLookup(page, subjectCode);
-  await runSearch(page);
-
-  const hasResults = await checkForResults(page);
-  if (!hasResults) return [];
-
-  return parseCourseGroupsFromResults(page);
+): Promise<ScrapedCourse[]> {
+  await page.goto(`${CATALOGUE_BASE_URL}/${subjectCode.toLowerCase()}/`, { waitUntil: 'networkidle' });
+  return extractCourses(page);
 }
 
-async function checkForResults(page: Page): Promise<boolean> {
-  const noResultsText = await readText(page, '#DERIVED_CLSRCH_ERROR_TEXT');
-  if (noResultsText.length > 0) return false;
-
-  const groupCount = await page.$$eval(
-    '[id^="win0divSSR_CLSRSLT_WRK_GROUPBOX2GP"]',
-    els => els.length
-  );
-  return groupCount > 0;
+// Finds all .courseblock elements on the page, extracts raw text from each,
+// then parses them into ScrapedCourse objects. Invalid blocks are dropped.
+async function extractCourses(page: Page): Promise<ScrapedCourse[]> {
+  const rawBlocks = await extractRawBlocks(page);
+  return rawBlocks.map(parseCourseBlock).filter((c): c is ScrapedCourse => c !== null);
 }
 
-async function parseCourseGroupsFromResults(page: Page): Promise<ScrapedCourseHeader[]> {
-  const groups = await page.$$('[id^="SSR_CLSRSLT_WRK_GROUPBOX2$"]');
-  const courses: ScrapedCourseHeader[] = [];
-
-  let sectionIndex = 0;
-
-  for (const group of groups) {
-    const headerText = (await group.textContent() ?? '').trim();
-    const parsed = parseCourseHeaderText(headerText);
-    if (!parsed) continue;
-
-    const sectionCount = await countSectionsInGroup(page, sectionIndex);
-    const indices = buildSectionIndices(sectionIndex, sectionCount);
-
-    courses.push({ ...parsed, section_indices: indices });
-    sectionIndex += sectionCount;
-  }
-
-  return courses;
+// Each .courseblock on the catalogue page contains a title, a description,
+// and optionally a prerequisites/notes block. We grab all three as raw text.
+async function extractRawBlocks(page: Page): Promise<RawCourseBlock[]> {
+  const blocks = await page.$$('.courseblock');
+  return Promise.all(blocks.map(extractRawBlock));
 }
 
-function parseCourseHeaderText(text: string): { course_code: string; course_title: string } | null {
-  const match = text.match(/^([A-Z]{2,4}\s+\d{4}[A-Z]?)\s+-\s+(.+)/);
+async function extractRawBlock(block: ElementHandle): Promise<RawCourseBlock> {
+  const titleEl  = await block.$('.courseblocktitle');
+  const descEl   = await block.$('.courseblockdesc');
+  const prereqEl = await block.$('.courseblockextra.highlight');
+  return {
+    titleText:     ((await titleEl?.textContent())  ?? '').trim(),
+    description:   ((await descEl?.textContent())   ?? '').trim(),
+    prerequisites: ((await prereqEl?.textContent()) ?? '').trim(),
+  };
+}
+
+// Combines the parsed title fields with description and prerequisites.
+// Returns null if the title line can't be parsed (malformed catalogue entry).
+function parseCourseBlock(raw: RawCourseBlock): ScrapedCourse | null {
+  const header = parseCourseTitle(raw.titleText);
+  if (!header) return null;
+  return {
+    ...header,
+    description:   raw.description,
+    prerequisites: raw.prerequisites,
+  };
+}
+
+// Parses a title line like "CSI 2110 Data Structures and Algorithms (3 units)"
+// into code, title, and units. The regex requires: subject+number, then title
+// text, then the units in parentheses at the end.
+function parseCourseTitle(text: string): { course_code: string; course_title: string; units: string } | null {
+  const match = text.match(/^([A-Z]{2,6}\s+\d{4}[A-Z]?)\s+(.+?)\s+\((.+?)\)\s*$/);
   if (!match) return null;
-  return { course_code: match[1].trim(), course_title: match[2].trim() };
-}
-
-async function countSectionsInGroup(page: Page, startIndex: number): Promise<number> {
-  let count = 0;
-  while (await page.$(`#MTG_CLASSNAME\\$${startIndex + count}`) !== null) {
-    count++;
-  }
-  return count;
-}
-
-function buildSectionIndices(startIndex: number, count: number): number[] {
-  return Array.from({ length: count }, (_, i) => startIndex + i);
+  return {
+    course_code:  match[1].trim(),
+    course_title: match[2].trim(),
+    units:        match[3].trim(),
+  };
 }
