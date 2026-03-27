@@ -3,47 +3,29 @@ import {
   navigateToSearchPage,
   selectTerm,
   selectSubjectFromLookup,
+  fillCatalogNumber,
+  uncheckOpenOnly,
   runSearch,
-  clickSectionDetails,
-  goBackToSearchResults,
+  dismissPopup,
   readText,
-  readAllTexts,
 } from './navigation';
 
 // Top-level result grouping sections by course code. One subject search
 // returns results for every course in that subject that has sections this term.
 export interface ScrapedCourseSections {
   course_code: string;
-  sections:    ScrapedSectionDetail[];
+  sections:    ScrapedSectionResult[];
 }
 
-// All fields visible on a section's detail page in the class search.
-export interface ScrapedSectionDetail {
-  section_code:     string;   // e.g. "A00", "L01"
-  component:        string;   // e.g. "Lecture", "Lab", "Tutorial"
-  status:           string;   // e.g. "Open", "Closed", "Wait List"
-  session:          string;   // e.g. "Regular Academic Session"
-  instruction_mode: string;   // e.g. "In Person", "Online"
-  location:         string;
-  campus:           string;
-  date_start:       string;
-  date_end:         string;
-  grading_basis:    string;
-  offer_number:     string;
-  topic:            string;
-  class_components: string;
-  exam_days_times:  string;   // scheduled exam time (separate from regular meetings)
-  exam_date:        string;
-  meetings:         ScrapedMeeting[];
-}
-
-// One row in the "Class Meeting" table on the detail page. A section can have
-// multiple meeting patterns (e.g. lectures MWF + lab on Thursdays), each
-// stored as a separate row.
-export interface ScrapedMeeting {
-  days_times: string;   // e.g. "MoWeFr 10:00AM - 10:50AM"
-  instructor: string;
-  date_range: string;   // e.g. "01/06/2025 - 04/12/2025" or a specific week date
+// Fields read directly from each row in the search results table.
+export interface ScrapedSectionResult {
+  section_code: string;   // e.g. "X00"
+  component:    string;   // e.g. "LEC", "DGD", "LAB"
+  session:      string;   // e.g. "Session A"
+  days_times:   string;   // e.g. "We 19:00 - 21:50"
+  instructor:   string;   // e.g. "Staff"
+  date_start:   string;   // e.g. "2026-05-04"
+  date_end:     string;   // e.g. "2026-07-24"
 }
 
 // Entry point: searches the class search for a given term + subject and
@@ -51,13 +33,25 @@ export interface ScrapedMeeting {
 export async function scrapeSectionsForSubject(
   page: Page,
   termCode: string,
-  subjectCode: string
+  subjectCode: string,
+  courseCodes: string[] = []
 ): Promise<ScrapedCourseSections[]> {
   await navigateToSearchPage(page);
   await selectTerm(page, termCode);
   await selectSubjectFromLookup(page, subjectCode);
+  await uncheckOpenOnly(page);
   await runSearch(page);
   await waitForSearchRender(page);
+
+  const popup = await checkForPopup(page);
+  if (popup === 'no_results') {
+    return [];
+  }
+  if (popup === 'too_many') {
+    console.log(`[scraper]     ${subjectCode} has >300 sections — falling back to course-by-course`);
+    await dismissPopup(page);
+    return scrapeSectionsByCourse(page, termCode, subjectCode, courseCodes);
+  }
 
   const hasResults = await checkForResults(page);
   if (!hasResults) return [];
@@ -65,13 +59,59 @@ export async function scrapeSectionsForSubject(
   return scrapeAllCourseGroups(page);
 }
 
-// Waits for either the results container or the "no results" error element to
-// appear. We catch the timeout so a slow page doesn't crash the whole run.
+// Waits for results, the inline "no results" error, or the popup message box.
+// We catch the timeout so a slow page doesn't crash the whole run.
 async function waitForSearchRender(page: Page): Promise<void> {
   await page.waitForSelector(
-    '[id^="win0divSSR_CLSRSLT_WRK_GROUPBOX2GP"], #DERIVED_CLSRCH_ERROR_TEXT',
-    { timeout: 30000 }
+    '[id^="win0divSSR_CLSRSLT_WRK_GROUPBOX2GP"], #DERIVED_CLSRCH_ERROR_TEXT, #win0divDERIVED_CLSMSG_ERROR_TEXT',
+    { timeout: 60000 }
   ).catch(() => {});
+}
+
+type PopupKind = 'no_results' | 'too_many';
+
+// Checks whether the PeopleSoft message popup is visible and classifies it.
+// Returns null if no popup is present.
+async function checkForPopup(page: Page): Promise<PopupKind | null> {
+  const el = await page.$('#win0divDERIVED_CLSMSG_ERROR_TEXT');
+  if (!el || !(await el.isVisible())) return null;
+  const text = ((await el.textContent()) ?? '').toLowerCase();
+  if (text.includes('no classes')) return 'no_results';
+  return 'too_many';
+}
+
+// Searches the class search once per course number for subjects that return
+// a >300 sections popup when searched by subject alone.
+async function scrapeSectionsByCourse(
+  page: Page,
+  termCode: string,
+  subjectCode: string,
+  courseCodes: string[]
+): Promise<ScrapedCourseSections[]> {
+  const allResults: ScrapedCourseSections[] = [];
+
+  for (const courseCode of courseCodes) {
+    const catalogNbr = courseCode.replace(/\D/g, '');
+    await navigateToSearchPage(page);
+    await selectTerm(page, termCode);
+    await selectSubjectFromLookup(page, subjectCode);
+    await fillCatalogNumber(page, catalogNbr);
+    await uncheckOpenOnly(page);
+    await runSearch(page);
+    await waitForSearchRender(page);
+
+    const popup = await checkForPopup(page);
+    if (popup === 'no_results') { continue; }
+    if (popup === 'too_many') { await dismissPopup(page); continue; }
+
+    const hasResults = await checkForResults(page);
+    if (!hasResults) continue;
+
+    const results = await scrapeAllCourseGroups(page);
+    allResults.push(...results);
+  }
+
+  return allResults;
 }
 
 // Returns false if the "no classes found" message is shown, or true if there
@@ -87,147 +127,172 @@ async function checkForResults(page: Page): Promise<boolean> {
   return groupCount > 0;
 }
 
-// The search results are split into groups, one per course (e.g. all CSI 2110
-// sections together). We iterate each group, parse the course code from its
-// header, then scrape the individual sections inside it.
+// The search results are split into groups, one per course (e.g. all ADM 1100
+// sections together). Each #win0divSSR_CLSRSLT_WRK_GROUPBOX2GP$N element is
+// the course header only — sections are not its children. We use
+// compareDocumentPosition to assign each globally-indexed section row to the
+// header that immediately precedes it in the DOM.
 async function scrapeAllCourseGroups(page: Page): Promise<ScrapedCourseSections[]> {
-  const groups = await page.$$('[id^="win0divSSR_CLSRSLT_WRK_GROUPBOX2GP$"]');
-  const results: ScrapedCourseSections[] = [];
-  let sectionIndex = 0;
+  const groups = await page.evaluate(() => {
+    const headers  = Array.from(document.querySelectorAll('[id^="win0divSSR_CLSRSLT_WRK_GROUPBOX2GP$"]'));
+    const sections = Array.from(document.querySelectorAll('[id^="MTG_CLASSNAME$"]'));
 
-  for (const group of groups) {
-    const headerText = (await group.textContent() ?? '').trim();
+    return headers.map((header, hi) => {
+      const nextHeader = headers[hi + 1];
+      const indices = sections
+        .filter(sec => {
+          const afterThis  = !!(header.compareDocumentPosition(sec) & 4);  // sec follows header
+          const beforeNext = !nextHeader || !!(nextHeader.compareDocumentPosition(sec) & 2); // sec precedes next header
+          return afterThis && beforeNext;
+        })
+        .map(sec => parseInt(sec.id.split('$')[1], 10))
+        .filter(i => !isNaN(i));
+      return { headerText: header.textContent?.trim() ?? '', indices };
+    });
+  });
+
+  const results: ScrapedCourseSections[] = [];
+  for (const { headerText, indices } of groups) {
     const course_code = parseCourseCode(headerText);
     if (!course_code) continue;
 
-    // Sections across all groups share a single flat index in the DOM
-    // (MTG_CLASSNAME$0, $1, $2, ...). We track our position across groups.
-    const count = await countSectionsInGroup(page, sectionIndex);
-    const indices = buildSectionIndices(sectionIndex, count);
-    const sections = await scrapeAllSectionDetails(page, indices);
+    // Read all rows for this course first, then post-process.
+    const raw: ScrapedSectionResult[] = [];
+    for (const i of indices) {
+      raw.push(await readSectionRow(page, i));
+    }
 
-    results.push({ course_code, sections });
-    sectionIndex += count;
+    // Within each section_code group: carry forward days_times, and pick the
+    // best instructor (real name preferred over "Staff").
+    // PeopleSoft suppresses repeated field values in sub-rows of the same section,
+    // so rows after the first may have blank days_times / instructor even though
+    // the values haven't changed.
+    let gi = 0;
+    while (gi < raw.length) {
+      const code = raw[gi].section_code;
+      const groupEnd = raw.findIndex((s, j) => j > gi && s.section_code !== code);
+      const group = raw.slice(gi, groupEnd === -1 ? undefined : groupEnd);
+
+      const bestInstructor =
+        group.map(s => s.instructor).find(ins => ins && ins !== 'Staff') ??
+        group.map(s => s.instructor).find(ins => !!ins) ??
+        '';
+
+      let lastDaysTimes = '';
+      for (const s of group) {
+        if (!s.days_times && lastDaysTimes) {
+          s.days_times = lastDaysTimes;
+        } else if (s.days_times) {
+          lastDaysTimes = s.days_times;
+        }
+        if ((!s.instructor || s.instructor === 'Staff') && bestInstructor) {
+          s.instructor = bestInstructor;
+        }
+      }
+
+      gi = groupEnd === -1 ? raw.length : groupEnd;
+    }
+
+    // For non-LEC sections still showing "Staff", use the LEC instructor from
+    // this course if one is available — "Staff" is a placeholder for unassigned.
+    const lecInstructor =
+      raw
+        .filter(s => s.component === 'LEC' && s.instructor && s.instructor !== 'Staff')
+        .map(s => s.instructor)[0] ?? '';
+
+    if (lecInstructor) {
+      for (const s of raw) {
+        if (s.component !== 'LEC' && (!s.instructor || s.instructor === 'Staff')) {
+          s.instructor = lecInstructor;
+        }
+      }
+    }
+
+    results.push({ course_code, sections: raw });
   }
-
   return results;
 }
 
-// Extracts the course code from a group header like "CSI 2110 - Data Structures".
+// Reads a multi-line cell (PeopleSoft separates lines with <br>). innerText
+// respects those breaks; we split, deduplicate, and join with " | ".
+async function readLines(page: Page, selector: string): Promise<string> {
+  try {
+    const raw: string = await page.$eval(selector, el => (el as HTMLElement).innerText);
+    const parts = raw.split('\n').map(s => s.trim()).filter(Boolean);
+    const unique = [...new Set(parts)];
+    return unique.join(' | ');
+  } catch {
+    return '';
+  }
+}
+
+// Reads the instructor cell for a section row. If the cell contains both
+// "Staff" and real names (e.g. two meeting rows merged into one cell),
+// the real names are preferred and "Staff" is dropped.
+async function readInstructor(page: Page, index: number): Promise<string> {
+  try {
+    const raw: string = await page.$eval(`#MTG_INSTR\\$${index}`, el => (el as HTMLElement).innerText);
+    const parts = raw.split('\n').map(s => s.trim()).filter(Boolean);
+    const unique = [...new Set(parts)];
+    const realNames = unique.filter(n => n !== 'Staff');
+    return (realNames.length > 0 ? realNames : unique).join(' | ');
+  } catch {
+    return '';
+  }
+}
+
+// Reads one section row from the results table by its global index.
+async function readSectionRow(page: Page, index: number): Promise<ScrapedSectionResult> {
+  const classname  = await readText(page, `#MTG_CLASSNAME\\$${index}`);
+  const days_times = await readLines(page, `#MTG_DAYTIME\\$${index}`);
+  const instructor = await readInstructor(page, index);
+  const { date_start, date_end } = await readDateRange(page, index);
+
+  const { section_code, component, session } = parseClassName(classname);
+
+  return { section_code, component, session, days_times, instructor, date_start, date_end };
+}
+
+// Reads the date range cell. Each line is "YYYY-MM-DD - YYYY-MM-DD" (one per
+// meeting). Returns date_start and date_end as pipe-joined lists preserving
+// position — e.g. "2026-06-22 | 2026-06-22" and "2026-07-31 | 2026-07-31".
+async function readDateRange(page: Page, index: number): Promise<{ date_start: string; date_end: string }> {
+  try {
+    const raw: string = await page.$eval(`#MTG_TOPIC\\$${index}`, el => (el as HTMLElement).innerText);
+    const lines = raw.split('\n').map(s => s.trim()).filter(Boolean);
+    const starts: string[] = [];
+    const ends: string[] = [];
+    for (const line of lines) {
+      const [s, e] = line.split(' - ').map(p => p.trim());
+      starts.push(s ?? '');
+      ends.push(e ?? '');
+    }
+    return { date_start: starts.join(' | '), date_end: ends.join(' | ') };
+  } catch {
+    return { date_start: '', date_end: '' };
+  }
+}
+
+// Parses "X00-DGDSession A" or "SLC2-SEMTerm" into its three parts.
+// Section code is everything before the first "-". Component is all-caps
+// letters after it; session starts where we first see uppercase+lowercase.
+function parseClassName(raw: string): { section_code: string; component: string; session: string } {
+  const dashIdx = raw.indexOf('-');
+  if (dashIdx < 0) return { section_code: raw.trim(), component: '', session: '' };
+
+  const section_code = raw.slice(0, dashIdx);
+  const rest         = raw.slice(dashIdx + 1);
+
+  const sessionIdx = rest.search(/[A-Z][a-z]/);
+  const component  = (sessionIdx >= 0 ? rest.slice(0, sessionIdx) : rest).trim();
+  const session    = (sessionIdx >= 0 ? rest.slice(sessionIdx) : '').trim();
+
+  return { section_code, component, session };
+}
+
+// Extracts the course code from a group header like "ADM 1100 - Introduction to Business".
 function parseCourseCode(headerText: string): string | null {
   const match = headerText.match(/\b([A-Z]{2,6}\s+\d{4}[A-Z]?)\s+-\s+/);
-  return match ? match[1].trim() : null;
+  return match ? match[1].replace(/\s+/g, ' ').trim() : null;
 }
 
-// Counts how many sections belong to a group by probing for DOM elements.
-// Sections are indexed globally, so we start from startIndex and increment
-// until the element no longer exists.
-async function countSectionsInGroup(page: Page, startIndex: number): Promise<number> {
-  let count = 0;
-  while (await page.$(`#MTG_CLASSNAME\\$${startIndex + count}`) !== null) {
-    count++;
-  }
-  return count;
-}
-
-function buildSectionIndices(startIndex: number, count: number): number[] {
-  return Array.from({ length: count }, (_, i) => startIndex + i);
-}
-
-// For each section index, clicks into the detail page, scrapes all fields,
-// then navigates back to the results list before moving to the next section.
-async function scrapeAllSectionDetails(
-  page: Page,
-  indices: number[]
-): Promise<ScrapedSectionDetail[]> {
-  const details: ScrapedSectionDetail[] = [];
-  for (const index of indices) {
-    details.push(await scrapeSingleSectionDetail(page, index));
-  }
-  return details;
-}
-
-async function scrapeSingleSectionDetail(page: Page, index: number): Promise<ScrapedSectionDetail> {
-  await clickSectionDetails(page, index);
-  const detail = await extractSectionFields(page);
-  await goBackToSearchResults(page);
-  return detail;
-}
-
-// Reads all fields from a section detail page. The IDs are PeopleSoft
-// auto-generated names — the escaped $0 suffix means "first row".
-async function extractSectionFields(page: Page): Promise<ScrapedSectionDetail> {
-  const header    = await readText(page, '#DERIVED_CLSRCH_DESCR200');
-  const dateRange = await readText(page, '#SSR_CLS_DTL_WRK_SSR_DATE_LONG');
-  const meetings  = await extractMeetingRows(page);
-
-  return {
-    section_code:     parseSectionCode(header),
-    component:        parseComponent(await readText(page, '#DERIVED_CLSRCH_SSS_PAGE_KEYDESCR')),
-    status:           await readText(page, '#SSR_CLS_DTL_WRK_SSR_DESCRSHORT'),
-    session:          await readText(page, '#PSXLATITEM_XLATLONGNAME\\$31\\$'),
-    instruction_mode: await readText(page, '#INSTRUCT_MODE_DESCR'),
-    location:         await readText(page, '#CAMPUS_LOC_VW_DESCR'),
-    campus:           await readText(page, '#CAMPUS_TBL_DESCR'),
-    date_start:       parseDateStart(dateRange),
-    date_end:         parseDateEnd(dateRange),
-    grading_basis:    await readText(page, '#GRADE_BASIS_TBL_DESCRFORMAL'),
-    offer_number:     await readText(page, '#SSR_CLS_DTL_WRK_CRSE_OFFER_NBR'),
-    topic:            await readText(page, '#DERIVED_CLSRCH_SSR_TOPIC_DESCR'),
-    class_components: await readText(page, '#SSR_CLS_DTL_WRK_SSR_COMPONENT_LONG'),
-    // MTG_SCHED1$0 / UO_EXM_INFO_WRK... are the exam-specific schedule fields,
-    // separate from the regular weekly meeting rows below.
-    exam_days_times:  await readText(page, '#MTG_SCHED1\\$0'),
-    exam_date:        await readText(page, '#UO_EXM_INFO_WRK_UO_SSR_EXM_DT_LONG\\$0'),
-    meetings,
-  };
-}
-
-// Reads the repeating meeting table. Each row has a schedule, an instructor,
-// and a date range. There can be 1–N rows depending on the section (e.g. a
-// course with separate lecture + lab patterns, or a course meeting only on
-// specific individual dates throughout the semester).
-async function extractMeetingRows(page: Page): Promise<ScrapedMeeting[]> {
-  const schedules   = await readAllTexts(page, '[id^="MTG_SCHED$"]');
-  const instructors = await readAllTexts(page, '[id^="MTG_INSTR$"]');
-  const dates       = await readAllTexts(page, '[id^="MTG_DATE$"]');
-  return buildMeetingRows(schedules, instructors, dates);
-}
-
-// Zips the three parallel arrays together by index. If instructors or dates
-// are shorter than schedules (missing data), defaults to empty string.
-function buildMeetingRows(
-  schedules: string[],
-  instructors: string[],
-  dates: string[]
-): ScrapedMeeting[] {
-  return schedules.map((days_times, i) => ({
-    days_times,
-    instructor: instructors[i] ?? '',
-    date_range: dates[i] ?? '',
-  }));
-}
-
-// Parses the section code out of the page header, e.g.
-// "CSI 2110 - Data Structures (A00)" → "A00"
-function parseSectionCode(header: string): string {
-  const match = header.match(/\b([A-Z]\d{2}[A-Z]?)\b/);
-  return match ? match[1] : header.split(/\s+/).slice(-1)[0] ?? '';
-}
-
-// The component is the last pipe-delimited segment of the subheader,
-// e.g. "CSI 2110 | 12345 | Lecture" → "Lecture"
-function parseComponent(subheader: string): string {
-  const parts = subheader.split('|');
-  return parts[parts.length - 1]?.trim() ?? '';
-}
-
-// The overall section date range is displayed as "Jan 6, 2025 - Apr 12, 2025".
-// We split on " - " to get the start and end separately.
-function parseDateStart(dateRange: string): string {
-  return dateRange.split(' - ')[0]?.trim() ?? '';
-}
-
-function parseDateEnd(dateRange: string): string {
-  return dateRange.split(' - ')[1]?.trim() ?? '';
-}

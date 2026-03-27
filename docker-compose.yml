@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: courses
       POSTGRES_USER: courses_user
-      POSTGRES_PASSWORD: dyer6550
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init/schema.sql:/docker-entrypoint-initdb.d/schema.sql
@@ -24,6 +24,27 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: courses_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      API_PORT: 3000
+    ports:
+      - "3000:3000"
     depends_on:
       db:
         condition: service_healthy

@@ -7,18 +7,27 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "test:scrape": "ts-node test-scrape.ts"
+    "dev:scrape":"ts-node run-scraper.ts",
+    "dev:watch": "cross-env HEADLESS=true SLOW_MO=100 TERM_FILTER=spring SUBJECT_LIMIT=5 ts-node run-scraper.ts",
+    "sections": "ts-node run-sections.ts",
+    "sections:watch": "cross-env HEADLESS=false SLOW_MO=100 TERM_FILTER=spring ts-node run-sections.ts",
+    "test:scrape": "ts-node test-scrape.ts",
+    "dev:api": "ts-node src/api/index.ts",
+    "start:api": "node dist/api/index.js"
   },
   "dependencies": {
     "dotenv": "^17.3.1",
+    "express": "^5.2.1",
     "node-cron": "^3.0.3",
     "pg": "^8.13.1",
     "playwright": "^1.50.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.13.5",
     "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.11.11",
+    "cross-env": "^10.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   }

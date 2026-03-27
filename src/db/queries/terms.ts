@@ -1,5 +1,18 @@
 import pool from '../client';
 
+export interface TermResult {
+  id: number;
+  term_code: string;
+  term_name: string;
+}
+
+export async function getTerms(): Promise<TermResult[]> {
+  const result = await pool.query<TermResult>(
+    `SELECT id, term_code, term_name FROM terms ORDER BY term_code DESC`
+  );
+  return result.rows;
+}
+
 export interface TermRow {
   term_code: string;
   term_name: string;

@@ -49,10 +49,14 @@ async function extractRawBlock(block: ElementHandle): Promise<RawCourseBlock> {
   const descEl   = await block.$('.courseblockdesc');
   const prereqEl = await block.$('.courseblockextra.highlight');
   return {
-    titleText:     ((await titleEl?.textContent())  ?? '').trim(),
-    description:   ((await descEl?.textContent())   ?? '').trim(),
-    prerequisites: ((await prereqEl?.textContent()) ?? '').trim(),
+    titleText:     normalizeText((await titleEl?.textContent())  ?? ''),
+    description:   normalizeText((await descEl?.textContent())   ?? ''),
+    prerequisites: normalizeText((await prereqEl?.textContent()) ?? ''),
   };
+}
+
+function normalizeText(s: string): string {
+  return s.replace(/\u00A0/g, ' ').trim();
 }
 
 // Combines the parsed title fields with description and prerequisites.
@@ -74,7 +78,7 @@ function parseCourseTitle(text: string): { course_code: string; course_title: st
   const match = text.match(/^([A-Z]{2,6}\s+\d{4}[A-Z]?)\s+(.+?)\s+\((.+?)\)\s*$/);
   if (!match) return null;
   return {
-    course_code:  match[1].trim(),
+    course_code:  match[1].replace(/\s+/g, ' ').trim(),
     course_title: match[2].trim(),
     units:        match[3].trim(),
   };

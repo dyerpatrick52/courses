@@ -25,6 +25,9 @@ docker compose down -v        # stop and wipe database volume
 # Trigger a manual scrape run against a running Docker instance
 docker compose run --rm scraper node -e "require('./dist/scraper').runScraper()"
 
+# Trigger a manual scrape run against a running Docker instance
+docker compose run --rm scraper node -e "require('./dist/scraper').runSections()"
+
 # Logs
 docker compose logs -f scraper
 ```

@@ -1,92 +1,68 @@
 import pool from '../client';
 
-export interface SectionRow {
-  course_id:       number;
-  section_code:    string;
-  component:       string;
-  status:          string;
-  session:         string;
-  instruction_mode: string;
-  location:        string;
-  campus:          string;
-  date_start:      string;
-  date_end:        string;
-  grading_basis:   string;
-  offer_number:    string;
-  topic:           string;
-  class_components: string;
-  exam_days_times: string;
-  exam_date:       string;
+export interface SectionResult {
+  id:            number;
+  section_code:  string;
+  meeting_index: number;
+  component:     string;
+  session:       string;
+  days_times:    string;
+  instructor:    string;
+  date_start:    string;
+  date_end:      string;
 }
 
-export interface MeetingRow {
-  section_id: number;
-  days_times: string;
-  instructor: string;
-  date_range: string;
-}
-
-export async function upsertSection(section: SectionRow): Promise<number> {
-  const result = await pool.query<{ id: number }>(
-    `INSERT INTO sections (
-       course_id, section_code, component, status, session,
-       instruction_mode, location, campus, date_start, date_end,
-       grading_basis, offer_number, topic, class_components,
-       exam_days_times, exam_date, updated_at
-     )
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
-     ON CONFLICT (course_id, section_code)
-     DO UPDATE SET
-       component        = EXCLUDED.component,
-       status           = EXCLUDED.status,
-       session          = EXCLUDED.session,
-       instruction_mode = EXCLUDED.instruction_mode,
-       location         = EXCLUDED.location,
-       campus           = EXCLUDED.campus,
-       date_start       = EXCLUDED.date_start,
-       date_end         = EXCLUDED.date_end,
-       grading_basis    = EXCLUDED.grading_basis,
-       offer_number     = EXCLUDED.offer_number,
-       topic            = EXCLUDED.topic,
-       class_components = EXCLUDED.class_components,
-       exam_days_times  = EXCLUDED.exam_days_times,
-       exam_date        = EXCLUDED.exam_date,
-       updated_at       = NOW()
-     RETURNING id`,
-    [
-      section.course_id,
-      section.section_code,
-      section.component,
-      section.status,
-      section.session,
-      section.instruction_mode,
-      section.location,
-      section.campus,
-      section.date_start,
-      section.date_end,
-      section.grading_basis,
-      section.offer_number,
-      section.topic,
-      section.class_components,
-      section.exam_days_times,
-      section.exam_date,
-    ]
+export async function getSectionsByCourseCode(
+  termCode: string,
+  subjectCode: string,
+  courseCode: string
+): Promise<SectionResult[]> {
+  const result = await pool.query<SectionResult>(
+    `SELECT s.id, s.section_code, s.meeting_index, s.component, s.session,
+            s.days_times, s.instructor, s.date_start, s.date_end
+     FROM sections s
+     JOIN terms t ON t.id = s.term_id
+     WHERE t.term_code = $1 AND s.subject_code = $2 AND s.course_code = $3
+     ORDER BY s.section_code, s.meeting_index`,
+    [termCode, subjectCode, courseCode]
   );
-  return result.rows[0].id;
+  return result.rows;
 }
 
-export async function replaceMeetingsForSection(meetings: MeetingRow[]): Promise<void> {
+export interface SectionRow {
+  term_id:       number;
+  subject_code:  string;
+  course_code:   string;
+  section_code:  string;
+  meeting_index: number;
+  component:     string;
+  session:       string;
+  days_times:    string;
+  instructor:    string;
+  date_start:    string;
+  date_end:      string;
+}
+
+// Replaces all meeting rows for a section with the provided list.
+// Deletes existing meetings first so stale rows (e.g. count changed) don't linger.
+export async function upsertSectionMeetings(meetings: SectionRow[]): Promise<void> {
   if (meetings.length === 0) return;
-
-  const sectionId = meetings[0].section_id;
-
-  await pool.query(`DELETE FROM section_meetings WHERE section_id = $1`, [sectionId]);
-
-  for (const meeting of meetings) {
+  const { term_id, subject_code, course_code, section_code } = meetings[0];
+  await pool.query(
+    `DELETE FROM sections WHERE term_id=$1 AND subject_code=$2 AND course_code=$3 AND section_code=$4`,
+    [term_id, subject_code, course_code, section_code]
+  );
+  for (const m of meetings) {
     await pool.query(
-      `INSERT INTO section_meetings (section_id, days_times, instructor, date_range)
-       VALUES ($1, $2, $3, $4)`,
-      [meeting.section_id, meeting.days_times, meeting.instructor, meeting.date_range]
+      `INSERT INTO sections (
+         term_id, subject_code, course_code, section_code, meeting_index,
+         component, session, days_times, instructor, date_start, date_end
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [
+        m.term_id, m.subject_code, m.course_code, m.section_code, m.meeting_index,
+        m.component, m.session, m.days_times, m.instructor, m.date_start, m.date_end,
+      ]
     );
   }
 }

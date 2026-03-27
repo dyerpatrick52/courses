@@ -1,5 +1,5 @@
 const DEFAULT_RETRIES = 3;
-const DEFAULT_DELAY_MS = 2000;
+const DEFAULT_DELAY_MS = 15000;
 
 export async function withRetry<T>(
   fn: () => Promise<T>,

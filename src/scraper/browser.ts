@@ -11,7 +11,10 @@ export interface BrowserSession {
 // Starts a headless Chromium instance and opens a single page.
 // headless: true is required when running inside Docker (no display server).
 export async function launchBrowser(): Promise<BrowserSession> {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: process.env.HEADLESS !== 'false',
+    slowMo:   process.env.SLOW_MO ? parseInt(process.env.SLOW_MO) : undefined,
+  });
   const context = await browser.newContext();
   const page    = await context.newPage();
   return { browser, context, page };
