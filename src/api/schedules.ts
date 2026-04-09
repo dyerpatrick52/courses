@@ -1,6 +1,5 @@
-import { SecureClientSessionOptions } from 'http2';
 import { getSectionsForCourses, ScheduleSectionRow } from '../db/queries/sections';
-import { compileFunction } from 'vm';
+import { time } from 'console';
 
 export interface GenerateRequest {
   term_code: string;
@@ -10,10 +9,12 @@ export interface GenerateRequest {
     free_days?: string[];                         // e.g. ["Fr"]
     no_back_to_back?: boolean;
     no_three_in_row?: boolean;
-    latest_start?: string;                        // e.g. "09:00"
-    earliest_end?: string;                        // e.g. "17:00"
+    earliest_start?: string;                        // e.g. "09:00"
+    latest_end?: string;                        // e.g. "17:00"
   };
 }
+
+type Meeting = {day:string, start: number, end:number};
 
 // Splits "CSI 3140" into { subjectCode: "CSI", courseCode: "3140" }.
 // The split point is the last space so codes like "GNG 1105" work correctly.
@@ -26,7 +27,7 @@ function parseCourseString(course: string): { subjectCode: string; courseCode: s
   };
 }
 
-export async function generateSchedules(req: GenerateRequest): Promise<void> {
+export async function generateSchedules(req: GenerateRequest): Promise<ScheduleSectionRow[][]> {
   // Step 1 — Parse course strings and fetch all section rows in one query.
   const pairs = req.courses.map(parseCourseString);
   const rows = await getSectionsForCourses(req.term_code, pairs);
@@ -44,6 +45,107 @@ export async function generateSchedules(req: GenerateRequest): Promise<void> {
 
     byCourseThenLetter.set(courseKey, letterMap);
   }
+  const perCourseCandidates: ScheduleSectionRow[][][] = [];
+  for (const [, letterMap] of byCourseThenLetter) {
+    const candidates: ScheduleSectionRow[][] = [];
+    for (const letterRows of letterMap.values()) {
+      candidates.push(...buildSectionGroupCandidates(letterRows));
+    }
+    perCourseCandidates.push(candidates);
+  }
+
+  let validSchedules: ScheduleSectionRow[][]=[[]];
+  for (const candidates of perCourseCandidates){
+    const next: ScheduleSectionRow[][]=[];
+    for (const partial of validSchedules){
+      for (const candidate of candidates){
+        if(!conflictsWithPartial(candidate, partial)){
+          next.push([...partial, ...candidate]);
+        }
+      }
+    }
+    validSchedules = next;
+  }
+
+  if (req.filters) {
+    const { free_days, no_back_to_back, no_three_in_row, earliest_start, latest_end } = req.filters;
+    if (free_days?.length)   validSchedules = validSchedules.filter(s => !hasMeetingsOnDays(s, free_days));
+    if (earliest_start)        validSchedules = validSchedules.filter(s => !hasStartBefore(s, earliest_start)); //earliest start
+    if (latest_end)        validSchedules = validSchedules.filter(s => !hasEndAfter(s, latest_end));    //latest end
+    if (no_back_to_back)     validSchedules = validSchedules.filter(s => !hasBackToBack(s));
+  //   if (no_three_in_row)     validSchedules = validSchedules.filter(s => !hasThreeInRow(s));
+  }
+
+
+  return validSchedules;
+
+}
+
+export function hasMeetingsOnDays(schedule: ScheduleSectionRow[], days: string[]): boolean {
+    return schedule.some(row =>
+      parseDayTimes(row.days_times).some(m => days.includes(m.day))
+    );
+  }
+
+export function hasStartBefore(schedule: ScheduleSectionRow[], earliest_start: string): boolean{
+  const earliest_start_time = timeToMinutes(earliest_start);
+  return schedule.some(row => 
+    parseDayTimes(row.days_times).some(meeting => (meeting.start < earliest_start_time))
+  );
+}
+
+export function hasEndAfter(schedule: ScheduleSectionRow[], latest_end: string): boolean{
+  const latest_end_time = timeToMinutes(latest_end);
+  return schedule.some(row => 
+    parseDayTimes(row.days_times).some(meeting => (meeting.end > latest_end_time))
+  );
+}
+
+export function hasBackToBack(schedule : ScheduleSectionRow[]): boolean {
+  const allMeetings = schedule.flatMap(r => parseDayTimes(r.days_times));
+  const meetingByDay = new Map<string, Meeting[]>();
+  for (const m of allMeetings){
+    if(!meetingByDay.has(m.day)){
+      meetingByDay.set(m.day, []);
+    }
+    meetingByDay.get(m.day)!.push(m);
+  }
+  for (const day of meetingByDay.values()){
+    day.sort((a, b) => a.start - b.start);
+    for(let i = 0; i < day.length - 1; i++){
+      if(day[i].end === day[i+1].start-10){
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function hasThreeInRow(schedule: ScheduleSectionRow[]):boolean{
+  const allMeetings = schedule.flatMap(r => parseDayTimes(r.days_times));
+  const meetingByDay = new Map<string, Meeting[]>();
+  for (const m of allMeetings){
+    if(!meetingByDay.has(m.day)){
+      meetingByDay.set(m.day, []);
+    }
+    meetingByDay.get(m.day)!.push(m);
+  }
+  for (const day of meetingByDay.values()){
+    day.sort((a, b) => a.start - b.start);
+    let streak = 1;
+    for(let i = 0; i < day.length - 1; i++){
+      if(day[i].end === day[i+1].start-10){
+        streak++;
+      }
+      else {
+        streak = 1;
+      }
+      if (streak === 3){
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 export function groupByCourse(rows: ScheduleSectionRow[]):(Map<string, ScheduleSectionRow[]>){
@@ -100,3 +202,32 @@ function cartesian(optionGroups: ScheduleSectionRow[][][]): ScheduleSectionRow[]
       [[]]
     );
   }
+
+export function timeToMinutes(t: string):(number){
+  const time = t.split(":");
+  const hour = Number(time[0]);
+  const min = Number(time[1]);
+  const totalMins = hour*60 + min;
+  return totalMins;
+}
+
+export function parseDayTimes(s: string): Meeting[] {
+  if (!s || s.trim() === 'TBA') return [];
+  const splitString = s.split(" ");
+  return [{ day: splitString[0], start: timeToMinutes(splitString[1]), end: timeToMinutes(splitString[3]) }];
+}
+
+export function meetingsOverlap(a: Meeting, b: Meeting):(boolean){
+  if (a.day === b.day){
+    if (a.start < b.end && b.start < a.end){
+      return true;
+    }
+  }
+  return false;
+}
+
+export function conflictsWithPartial(candidate: ScheduleSectionRow[], partial: ScheduleSectionRow[]): boolean {
+  const candidateMeetings = candidate.flatMap(r => parseDayTimes(r.days_times));
+  const partialMeetings = partial.flatMap(r => parseDayTimes(r.days_times));
+  return candidateMeetings.some(cm => partialMeetings.some(pm => meetingsOverlap(cm, pm)));
+}
