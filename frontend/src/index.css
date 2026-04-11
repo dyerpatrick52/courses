@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --accent: #8b1a1a;
+  --accent-light: #b02020;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+html.dark {
+  --accent: #a02020;
+  --accent-light: #c02828;
+}
+
+body { margin: 0; }
+
+/* Smooth theme transitions */
+*, *::before, *::after {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+#root { height: 100vh; display: flex; }
+
+/* Dark scrollbars */
+.dark-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 transparent;
+}
+.dark-scroll::-webkit-scrollbar { width: 6px; }
+.dark-scroll::-webkit-scrollbar-track { background: transparent; }
+.dark-scroll::-webkit-scrollbar-thumb { background-color: #374151; border-radius: 3px; }
+
+/* Dark calendar scrollbar */
+html.dark .fc-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 transparent;
+}
+html.dark .fc-scroller::-webkit-scrollbar { width: 6px; }
+html.dark .fc-scroller::-webkit-scrollbar-track { background: transparent; }
+html.dark .fc-scroller::-webkit-scrollbar-thumb { background-color: #374151; border-radius: 3px; }
+
+/* FullCalendar base */
+.fc { font-family: 'DM Sans', system-ui, sans-serif; height: 100%; }
+.fc .fc-toolbar-title { font-size: 1rem; font-weight: 600; }
+.fc .fc-button {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.8rem;
+  padding: 4px 12px;
+}
+.fc .fc-button:hover { background: var(--accent-light) !important; border-color: var(--accent-light) !important; }
+.fc .fc-button-active { background: var(--accent-light) !important; }
+.fc .fc-col-header-cell { font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.fc .fc-timegrid-slot { height: 28px; }
+.fc .fc-timegrid-slot-label { font-size: 0.7rem; color: #9ca3af; }
+.fc-event { border-radius: 4px !important; font-size: 0.7rem !important; }
+.fc-event-title { font-weight: 600; }
+
+/* Dark mode FullCalendar */
+html.dark .fc { color: #e5e7eb; }
+html.dark .fc .fc-scrollgrid,
+html.dark .fc td,
+html.dark .fc th { border-color: #374151 !important; }
+html.dark .fc .fc-col-header-cell { background: #1f2937; color: #d1d5db; }
+html.dark .fc .fc-timegrid-slot-label { color: #6b7280; }
+html.dark .fc .fc-timegrid-axis { background: #1f2937; }
+html.dark .fc-timegrid-col { background: #111827; }
+html.dark .fc .fc-toolbar-title { color: #f3f4f6; }
+html.dark .fc .fc-timegrid-now-indicator-line { border-color: var(--accent-light); }
+html.dark .fc .fc-timegrid-now-indicator-arrow { border-top-color: var(--accent-light); border-bottom-color: var(--accent-light); }

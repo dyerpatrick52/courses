@@ -1,5 +1,4 @@
 import { getSectionsForCourses, ScheduleSectionRow } from '../db/queries/sections';
-import { time } from 'console';
 
 export interface GenerateRequest {
   term_code: string;
@@ -16,6 +15,23 @@ export interface GenerateRequest {
 
 type Meeting = {day:string, start: number, end:number};
 
+export interface ScheduleMeeting {
+  day: string;
+  start: string;
+  end: string;
+  component: string;
+  section_code: string;
+  date_start: string;
+  date_end: string;
+}
+
+export interface ScheduleCourse {
+  instructor: string;
+  meetings: ScheduleMeeting[];
+}
+
+export type FormattedSchedule = Record<string, ScheduleCourse>;
+
 // Splits "CSI 3140" into { subjectCode: "CSI", courseCode: "3140" }.
 // The split point is the last space so codes like "GNG 1105" work correctly.
 function parseCourseString(course: string): { subjectCode: string; courseCode: string } {
@@ -23,15 +39,18 @@ function parseCourseString(course: string): { subjectCode: string; courseCode: s
   if (lastSpace < 0) throw new Error(`Invalid course string: "${course}"`);
   return {
     subjectCode: course.slice(0, lastSpace).trim(),
-    courseCode:  course.slice(lastSpace + 1).trim(),
+    courseCode:  course.trim(),
   };
 }
 
-export async function generateSchedules(req: GenerateRequest): Promise<ScheduleSectionRow[][]> {
+export async function generateSchedules(req: GenerateRequest): Promise<FormattedSchedule[]> {
   // Step 1 — Parse course strings and fetch all section rows in one query.
   const pairs = req.courses.map(parseCourseString);
   const rows = await getSectionsForCourses(req.term_code, pairs);
   const byCourse = groupByCourse(rows);
+  if (byCourse.size !== req.courses.length) {
+    throw new Error('One or more courses not found in the specified term');
+  }
   const byCourseThenLetter = new Map<string, Map<string, ScheduleSectionRow[]>>();
   for (const [courseKey, courseRows] of byCourse) {
     let letterMap = groupBySectionLetter(courseRows);
@@ -73,11 +92,11 @@ export async function generateSchedules(req: GenerateRequest): Promise<ScheduleS
     if (earliest_start)        validSchedules = validSchedules.filter(s => !hasStartBefore(s, earliest_start)); //earliest start
     if (latest_end)        validSchedules = validSchedules.filter(s => !hasEndAfter(s, latest_end));    //latest end
     if (no_back_to_back)     validSchedules = validSchedules.filter(s => !hasBackToBack(s));
-  //   if (no_three_in_row)     validSchedules = validSchedules.filter(s => !hasThreeInRow(s));
+    if (no_three_in_row)     validSchedules = validSchedules.filter(s => !hasThreeInRow(s));
   }
 
 
-  return validSchedules;
+  return validSchedules.map(formatSchedule);
 
 }
 
@@ -146,6 +165,32 @@ export function hasThreeInRow(schedule: ScheduleSectionRow[]):boolean{
     }
   }
   return false;
+}
+
+function formatSchedule(schedule: ScheduleSectionRow[]): FormattedSchedule {
+  const result: FormattedSchedule = {};
+  for (const row of schedule) {
+    const courseKey = row.course_code;
+    if (!result[courseKey]) {
+      result[courseKey] = {
+        instructor: row.instructor,
+        meetings:   [],
+      };
+    }
+    const parsed = parseDayTimes(row.days_times);
+    for (const m of parsed) {
+      result[courseKey].meetings.push({
+        day:          m.day,
+        start:        row.days_times.split(' ')[1],
+        end:          row.days_times.split(' ')[3],
+        component:    row.component,
+        section_code: row.section_code,
+        date_start:   row.date_start,
+        date_end:     row.date_end,
+      });
+    }
+  }
+  return result;
 }
 
 export function groupByCourse(rows: ScheduleSectionRow[]):(Map<string, ScheduleSectionRow[]>){

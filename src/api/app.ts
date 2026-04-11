@@ -3,6 +3,8 @@ import { getTerms } from '../db/queries/terms';
 import { getAllSubjects } from '../db/queries/subjects';
 import { getCoursesBySubjectCode } from '../db/queries/courses';
 import { getSectionsByCourseCode } from '../db/queries/sections';
+import { generateSchedules, GenerateRequest } from './schedules';
+import { countReset } from 'console';
 
 const app = express();
 app.use(express.json());
@@ -47,6 +49,28 @@ app.get('/terms/:termCode/subjects/:subjectCode/courses/:courseCode/sections', a
     }
     res.json(sections);
   } catch (err) { next(err); }
+});
+
+app.post('/schedules/generate', async (req, res, next) => {
+
+  try {
+    const body = req.body as GenerateRequest;
+    if(!body.term_code || !Array.isArray(body.courses) || body.courses.length === 0){
+      res.status(400).json({error: 'term code and at least one course required'});
+      return;
+    }
+    const schedules = await generateSchedules(body);
+    res.json({count: schedules.length, schedules});
+
+
+   } catch (err) {
+    if (err instanceof Error && err.message.includes('not found')) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+
 });
 
 // 404 for unregistered routes

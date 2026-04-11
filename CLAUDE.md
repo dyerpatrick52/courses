@@ -62,3 +62,23 @@ Copy `.env.example` to `.env`. When running locally (not in Docker), set `POSTGR
 ## Changing the Schedule
 
 Edit the cron expression in `src/scheduler/index.ts`. Current: `'0 2 1 1,5,9 *'` (02:00 on Jan 1, May 1, Sep 1).
+
+## Frontend (`frontend/`)
+
+Vite + React + TypeScript + Tailwind v4 (via `@tailwindcss/vite` plugin).
+
+```bash
+cd frontend && npm run dev   # dev server at http://localhost:5173
+cd frontend && npm run build # production build
+```
+
+The Vite dev server proxies `/api/*` → `http://localhost:3000` (the Express API). Keep Docker running when doing frontend dev.
+
+### Conventions
+- **Components**: functional components only, no class components
+- **Styling**: Tailwind utility classes only — no separate CSS files, no inline `style` except for dynamic values (e.g. calculated positions/heights)
+- **Types**: all API response shapes are defined in `frontend/src/api/types.ts` — keep them in sync with the backend interfaces in `src/api/schedules.ts`
+- **API calls**: all `fetch` calls go through `frontend/src/api/client.ts` — never call `fetch` directly in a component
+- **State**: keep state as high as needed but no higher — lift to `App.tsx` only when multiple siblings need it
+- **File structure**: one component per file, named to match the export (e.g. `CalendarGrid.tsx` exports `CalendarGrid`)
+- **No useEffect for derived data**: compute derived values inline during render instead of syncing into state with `useEffect`
