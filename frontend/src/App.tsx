@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { FormattedSchedule, GenerateRequest } from './api/types';
 import { generateSchedules } from './api/client';
 import { resetCourseColors } from './utils/colors';
@@ -12,6 +12,20 @@ export default function App() {
   const [error, setError]         = useState<string | null>(null);
   const [generated, setGenerated] = useState(false);
   const { mode, cycle } = useTheme();
+
+  const availableSections = useMemo((): Record<string, string[]> => {
+    const map: Record<string, Set<string>> = {};
+    for (const schedule of schedules) {
+      for (const [courseCode, courseData] of Object.entries(schedule)) {
+        if (!map[courseCode]) map[courseCode] = new Set();
+        for (const meeting of courseData.meetings) {
+          const letter = meeting.section_code.match(/^[A-Za-z]+/)?.[0];
+          if (letter) map[courseCode].add(letter);
+        }
+      }
+    }
+    return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, [...v].sort()]));
+  }, [schedules]);
 
   async function handleGenerate(req: GenerateRequest) {
     setLoading(true);
@@ -30,7 +44,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-white dark:bg-gray-950">
-      <Sidebar onGenerate={handleGenerate} loading={loading} error={error} themeMode={mode} onThemeCycle={cycle} />
+      <Sidebar onGenerate={handleGenerate} loading={loading} error={error} themeMode={mode} onThemeCycle={cycle} availableSections={availableSections} />
       <main className="flex-1 flex flex-col min-h-0">
         {generated ? (
           <ScheduleViewer schedules={schedules} />

@@ -12,6 +12,7 @@ interface Props {
   error: string | null;
   themeMode: ThemeMode;
   onThemeCycle: () => void;
+  availableSections: Record<string, string[]>;
 }
 
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -23,7 +24,7 @@ function lsGet<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
 
-export default function Sidebar({ onGenerate, loading, error, themeMode, onThemeCycle }: Props) {
+export default function Sidebar({ onGenerate, loading, error, themeMode, onThemeCycle, availableSections }: Props) {
   const [terms, setTerms]                 = useState<Term[]>([]);
   const [termCode, setTermCode]           = useState(() => lsGet('termCode', ''));
   const [query, setQuery]                 = useState('');
@@ -35,6 +36,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
   const [no3Row, setNo3Row]               = useState(() => lsGet('no3Row', false));
   const [earliestStart, setEarliestStart] = useState(() => lsGet('earliestStart', ''));
   const [latestEnd, setLatestEnd]         = useState(() => lsGet('latestEnd', ''));
+  const [allowedSections, setAllowedSections] = useState<Record<string, string[]>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const prevTermCode = useRef<string | null>(null);
 
@@ -45,6 +47,12 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
   useEffect(() => { localStorage.setItem('no3Row',          JSON.stringify(no3Row));           }, [no3Row]);
   useEffect(() => { localStorage.setItem('earliestStart',   JSON.stringify(earliestStart));   }, [earliestStart]);
   useEffect(() => { localStorage.setItem('latestEnd',       JSON.stringify(latestEnd));        }, [latestEnd]);
+
+  useEffect(() => {
+    setAllowedSections(
+      Object.fromEntries(Object.entries(availableSections).map(([k, v]) => [k, [...v]]))
+    );
+  }, [availableSections]);
 
   useEffect(() => {
     fetchTerms().then(t => {
@@ -93,15 +101,31 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
     setSelected(prev => prev.filter(c => c !== code));
   }
 
+  function toggleSection(course: string, letter: string) {
+    setAllowedSections(prev => {
+      const cur = prev[course] ?? [];
+      return { ...prev, [course]: cur.includes(letter) ? cur.filter(l => l !== letter) : [...cur, letter] };
+    });
+  }
+
   function toggleDay(day: string) {
     setFreeDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
   }
 
   function handleGenerate() {
+    const restrictedSections: Record<string, string[]> = {};
+    for (const course of selectedCourses) {
+      const available = availableSections[course] ?? [];
+      const allowed   = allowedSections[course] ?? available;
+      if (allowed.length > 0 && allowed.length < available.length) {
+        restrictedSections[course] = allowed;
+      }
+    }
     const req: GenerateRequest = {
       term_code: termCode,
       courses: selectedCourses,
       filters: {
+        ...(Object.keys(restrictedSections).length && { allowed_sections: restrictedSections }),
         ...(freeDays.length && { free_days: freeDays }),
         ...(noB2B && { no_back_to_back: true }),
         ...(no3Row && { no_three_in_row: true }),
@@ -186,12 +210,40 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
             {selectedCourses.length === 0 && (
               <p className="text-sm text-gray-600 italic">No courses added yet.</p>
             )}
-            {selectedCourses.map(c => (
-              <div key={c} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 text-sm text-gray-800 dark:text-gray-200">
-                <span className="font-medium">{c}</span>
-                <button className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors ml-2" onClick={() => removeCourse(c)}>✕</button>
-              </div>
-            ))}
+            {selectedCourses.map(c => {
+              const letters = availableSections[c] ?? [];
+              const checked = allowedSections[c] ?? letters;
+              return (
+                <div key={c}>
+                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 text-sm text-gray-800 dark:text-gray-200">
+                    <span className="font-medium">{c}</span>
+                    <button className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors ml-2" onClick={() => removeCourse(c)}>✕</button>
+                  </div>
+                  {letters.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1 pl-1">
+                      {letters.map(letter => {
+                        const isChecked = checked.includes(letter);
+                        return (
+                          <button
+                            key={letter}
+                            onClick={() => toggleSection(c, letter)}
+                            className={`px-1.5 py-0.5 rounded text-xs font-medium border transition-colors ${
+                              isChecked
+                                ? 'text-white border-transparent'
+                                : 'bg-transparent border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500'
+                            }`}
+                            style={isChecked ? { background: 'var(--accent)' } : {}}
+                            title={`Section ${letter}`}
+                          >
+                            {letter}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </Card>
 
