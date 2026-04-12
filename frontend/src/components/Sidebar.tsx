@@ -24,21 +24,50 @@ function lsGet<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
 
+function parseUrlParams() {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    termCode:      p.get('term'),
+    courses:       p.getAll('course'),
+    freeDays:      p.get('freeDays')?.split(',').filter(Boolean) ?? null,
+    noB2B:         p.has('noB2B') ? p.get('noB2B') === '1' : null,
+    no3Row:        p.has('no3Row') ? p.get('no3Row') === '1' : null,
+    earliestStart: p.get('earliest'),
+    latestEnd:     p.get('latest'),
+  };
+}
+
+function buildUrl(req: GenerateRequest): string {
+  const p = new URLSearchParams();
+  p.set('term', req.term_code);
+  req.courses.forEach(c => p.append('course', c));
+  req.filters?.free_days?.length   && p.set('freeDays', req.filters.free_days.join(','));
+  req.filters?.no_back_to_back     && p.set('noB2B', '1');
+  req.filters?.no_three_in_row     && p.set('no3Row', '1');
+  req.filters?.earliest_start      && p.set('earliest', req.filters.earliest_start);
+  req.filters?.latest_end          && p.set('latest', req.filters.latest_end);
+  return '?' + p.toString();
+}
+
+const URL_PARAMS = parseUrlParams();
+
 export default function Sidebar({ onGenerate, loading, error, themeMode, onThemeCycle, availableSections }: Props) {
   const [terms, setTerms]                 = useState<Term[]>([]);
-  const [termCode, setTermCode]           = useState(() => lsGet('termCode', ''));
+  const [termCode, setTermCode]           = useState(() => URL_PARAMS.termCode      ?? lsGet('termCode', ''));
   const [query, setQuery]                 = useState('');
   const [suggestions, setSuggestions]     = useState<string[]>([]);
   const [allCourses, setAllCourses]       = useState<string[]>([]);
-  const [selectedCourses, setSelected]    = useState<string[]>(() => lsGet('selectedCourses', []));
-  const [freeDays, setFreeDays]           = useState<string[]>(() => lsGet('freeDays', []));
-  const [noB2B, setNoB2B]                 = useState(() => lsGet('noB2B', false));
-  const [no3Row, setNo3Row]               = useState(() => lsGet('no3Row', false));
-  const [earliestStart, setEarliestStart] = useState(() => lsGet('earliestStart', ''));
-  const [latestEnd, setLatestEnd]         = useState(() => lsGet('latestEnd', ''));
+  const [selectedCourses, setSelected]    = useState<string[]>(() => URL_PARAMS.courses.length > 0 ? URL_PARAMS.courses : lsGet('selectedCourses', []));
+  const [freeDays, setFreeDays]           = useState<string[]>(() => URL_PARAMS.freeDays      ?? lsGet('freeDays', []));
+  const [noB2B, setNoB2B]                 = useState(() => URL_PARAMS.noB2B         ?? lsGet('noB2B', false));
+  const [no3Row, setNo3Row]               = useState(() => URL_PARAMS.no3Row        ?? lsGet('no3Row', false));
+  const [earliestStart, setEarliestStart] = useState(() => URL_PARAMS.earliestStart ?? lsGet('earliestStart', ''));
+  const [latestEnd, setLatestEnd]         = useState(() => URL_PARAMS.latestEnd     ?? lsGet('latestEnd', ''));
   const [allowedSections, setAllowedSections] = useState<Record<string, string[]>>({});
+  const [copied, setCopied]               = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevTermCode = useRef<string | null>(null);
+  const didAutoGenerate = useRef(false);
 
   useEffect(() => { localStorage.setItem('termCode',        JSON.stringify(termCode));       }, [termCode]);
   useEffect(() => { localStorage.setItem('selectedCourses', JSON.stringify(selectedCourses)); }, [selectedCourses]);
@@ -53,6 +82,14 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
       Object.fromEntries(Object.entries(availableSections).map(([k, v]) => [k, [...v]]))
     );
   }, [availableSections]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!didAutoGenerate.current && URL_PARAMS.courses.length > 0 && URL_PARAMS.termCode) {
+      didAutoGenerate.current = true;
+      handleGenerate();
+    }
+  }, []);
 
   useEffect(() => {
     fetchTerms().then(t => {
@@ -133,6 +170,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
         ...(latestEnd && { latest_end: latestEnd }),
       },
     };
+    window.history.replaceState(null, '', buildUrl(req));
     onGenerate(req);
   }
 
@@ -315,14 +353,25 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
       </div>
 
       {/* Generate button */}
-      <div className="p-3 border-t border-gray-200 dark:border-gray-800">
+      <div className="p-3 border-t border-gray-200 dark:border-gray-800 space-y-2">
         <button
           onClick={handleGenerate}
           disabled={loading || selectedCourses.length === 0}
-          className="w-full text-white font-semibold rounded-lg py-2 text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg mt-0"
+          className="w-full text-white font-semibold rounded-lg py-2 text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
           style={{ background: loading || selectedCourses.length === 0 ? '#374151' : 'var(--accent)' }}
         >
           {loading ? 'Generating…' : 'Generate Schedules'}
+        </button>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(window.location.href);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+          disabled={selectedCourses.length === 0}
+          className="w-full text-sm py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {copied ? 'Copied!' : 'Copy link'}
         </button>
       </div>
     </div>

@@ -32,6 +32,20 @@ docker compose run --rm scraper node -e "require('./dist/scraper').runSections()
 docker compose logs -f scraper
 ```
 
+## Deploying to Server
+
+SSH into the server, then:
+
+```bash
+git pull
+docker compose up --build -d          # rebuild and restart all services
+
+# If only frontend/API changed (faster — skips scraper rebuild):
+docker compose up --build -d api frontend
+```
+
+The frontend is served on port 80. The database volume is preserved across rebuilds.
+
 ## Architecture
 
 The scraper runs as a long-lived process that waits for cron triggers. On each run:
