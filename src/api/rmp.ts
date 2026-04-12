@@ -76,11 +76,11 @@ export async function getRmpRating(instructorName: string): Promise<RmpResult> {
     );
     if (ottawaEdges.length === 0) { cache.set(key, empty); return empty; }
 
-    // Pick the best match: prefer exact full-name match, otherwise take first uOttawa result
-    const nameLower = key;
+    // Pick the best match: prefer exact full-name match (accent-insensitive), otherwise take first uOttawa result
+    const normalizedKey = stripAccents(key);
     const best = ottawaEdges.find(e => {
-      const full = `${e.node.firstName} ${e.node.lastName}`.toLowerCase();
-      return full === nameLower;
+      const full = stripAccents(`${e.node.firstName} ${e.node.lastName}`.toLowerCase());
+      return full === normalizedKey;
     }) ?? ottawaEdges[0];
 
     const result: RmpResult = {
