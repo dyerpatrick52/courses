@@ -19,31 +19,48 @@ const DAY_LABELS: Record<string, string> = {
   Mo: 'Mon', Tu: 'Tue', We: 'Wed', Th: 'Thu', Fr: 'Fri', Sa: 'Sat', Su: 'Sun',
 };
 
+function lsGet<T>(key: string, fallback: T): T {
+  try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
+}
+
 export default function Sidebar({ onGenerate, loading, error, themeMode, onThemeCycle }: Props) {
   const [terms, setTerms]                 = useState<Term[]>([]);
-  const [termCode, setTermCode]           = useState('');
+  const [termCode, setTermCode]           = useState(() => lsGet('termCode', ''));
   const [query, setQuery]                 = useState('');
   const [suggestions, setSuggestions]     = useState<string[]>([]);
   const [allCourses, setAllCourses]       = useState<string[]>([]);
-  const [selectedCourses, setSelected]    = useState<string[]>([]);
-  const [freeDays, setFreeDays]           = useState<string[]>([]);
-  const [noB2B, setNoB2B]                 = useState(false);
-  const [no3Row, setNo3Row]               = useState(false);
-  const [earliestStart, setEarliestStart] = useState('');
-  const [latestEnd, setLatestEnd]         = useState('');
+  const [selectedCourses, setSelected]    = useState<string[]>(() => lsGet('selectedCourses', []));
+  const [freeDays, setFreeDays]           = useState<string[]>(() => lsGet('freeDays', []));
+  const [noB2B, setNoB2B]                 = useState(() => lsGet('noB2B', false));
+  const [no3Row, setNo3Row]               = useState(() => lsGet('no3Row', false));
+  const [earliestStart, setEarliestStart] = useState(() => lsGet('earliestStart', ''));
+  const [latestEnd, setLatestEnd]         = useState(() => lsGet('latestEnd', ''));
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevTermCode = useRef<string | null>(null);
+
+  useEffect(() => { localStorage.setItem('termCode',        JSON.stringify(termCode));       }, [termCode]);
+  useEffect(() => { localStorage.setItem('selectedCourses', JSON.stringify(selectedCourses)); }, [selectedCourses]);
+  useEffect(() => { localStorage.setItem('freeDays',        JSON.stringify(freeDays));        }, [freeDays]);
+  useEffect(() => { localStorage.setItem('noB2B',           JSON.stringify(noB2B));           }, [noB2B]);
+  useEffect(() => { localStorage.setItem('no3Row',          JSON.stringify(no3Row));           }, [no3Row]);
+  useEffect(() => { localStorage.setItem('earliestStart',   JSON.stringify(earliestStart));   }, [earliestStart]);
+  useEffect(() => { localStorage.setItem('latestEnd',       JSON.stringify(latestEnd));        }, [latestEnd]);
 
   useEffect(() => {
     fetchTerms().then(t => {
       setTerms(t);
-      if (t.length > 0) setTermCode(t[0].term_code);
+      if (t.length > 0 && !termCode) setTermCode(t[0].term_code);
     });
   }, []);
 
   useEffect(() => {
     if (!termCode) return;
-    setAllCourses([]);
-    setSelected([]);
+    // Only clear selected courses when the user actively switches terms, not on initial load
+    if (prevTermCode.current !== null && prevTermCode.current !== termCode) {
+      setAllCourses([]);
+      setSelected([]);
+    }
+    prevTermCode.current = termCode;
     fetch('/api/subjects').then(r => r.json()).then(async (subjects: { subject_code: string }[]) => {
       const results: string[] = [];
       await Promise.all(subjects.map(async s => {
