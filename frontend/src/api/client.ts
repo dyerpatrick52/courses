@@ -14,6 +14,18 @@ export async function fetchCourses(subjectCode: string): Promise<Course[]> {
   return res.json();
 }
 
+export interface RmpResult {
+  rating:     number | null;
+  numRatings: number | null;
+  url:        string | null;
+}
+
+export async function fetchRmpRating(name: string): Promise<RmpResult> {
+  const res = await fetch(`${BASE}/rmp/rating?name=${encodeURIComponent(name)}`);
+  if (!res.ok) return { rating: null, numRatings: null, url: null };
+  return res.json();
+}
+
 export async function generateSchedules(req: GenerateRequest): Promise<GenerateResponse> {
   const res = await fetch(`${BASE}/schedules/generate`, {
     method: 'POST',

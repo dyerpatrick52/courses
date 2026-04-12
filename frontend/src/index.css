@@ -70,3 +70,12 @@ html.dark .fc-timegrid-col { background: #111827; }
 html.dark .fc .fc-toolbar-title { color: #f3f4f6; }
 html.dark .fc .fc-timegrid-now-indicator-line { border-color: var(--accent-light); }
 html.dark .fc .fc-timegrid-now-indicator-arrow { border-top-color: var(--accent-light); border-bottom-color: var(--accent-light); }
+
+/* Print / PDF */
+@media print {
+  aside, .schedule-nav-bar, .schedule-stats-bar { display: none !important; }
+  .fc { height: auto !important; }
+  .fc-scroller { overflow: visible !important; height: auto !important; }
+  .fc-timegrid-body, .fc-timegrid-slots table, .fc-timegrid-cols table { height: auto !important; }
+  body { color-scheme: light; }
+}

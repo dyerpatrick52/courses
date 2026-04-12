@@ -4,7 +4,7 @@ import { getAllSubjects } from '../db/queries/subjects';
 import { getCoursesBySubjectCode } from '../db/queries/courses';
 import { getSectionsByCourseCode } from '../db/queries/sections';
 import { generateSchedules, GenerateRequest } from './schedules';
-import { countReset } from 'console';
+import { getRmpRating } from './rmp';
 
 const app = express();
 app.use(express.json());
@@ -71,6 +71,17 @@ app.post('/schedules/generate', async (req, res, next) => {
     next(err);
   }
 
+});
+
+app.get('/rmp/rating', async (req, res, next) => {
+  try {
+    const name = req.query.name as string;
+    if (!name?.trim()) {
+      res.status(400).json({ error: 'name query parameter required' });
+      return;
+    }
+    res.json(await getRmpRating(name.trim()));
+  } catch (err) { next(err); }
 });
 
 // 404 for unregistered routes

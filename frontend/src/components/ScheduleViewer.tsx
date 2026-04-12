@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import type { FormattedSchedule } from '../api/types';
 import CalendarGrid from './CalendarGrid';
+import ScheduleStats from './ScheduleStats';
+import { computeStats } from '../utils/scheduleStats';
+import { exportIcs } from '../utils/exportIcs';
 
 interface Props {
   schedules: FormattedSchedule[];
@@ -28,10 +31,12 @@ export default function ScheduleViewer({ schedules }: Props) {
     );
   }
 
+  const stats = computeStats(current!);
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Navigation bar */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shrink-0">
+      <div className="schedule-nav-bar flex items-center gap-3 px-5 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shrink-0">
         <button
           onClick={() => goTo(index - 1)}
           disabled={index === 0}
@@ -63,7 +68,28 @@ export default function ScheduleViewer({ schedules }: Props) {
         >
           →
         </button>
+
+        {/* Export buttons */}
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => exportIcs(current!)}
+            title="Export to calendar (.ics)"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs font-medium"
+          >
+            ICS
+          </button>
+          <button
+            onClick={() => window.print()}
+            title="Print / Save as PDF"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs font-medium"
+          >
+            PDF
+          </button>
+        </div>
       </div>
+
+      {/* Stats bar */}
+      <ScheduleStats stats={stats} />
 
       {/* Calendar */}
       <div className="flex-1 min-h-0 overflow-hidden dark:bg-gray-950">

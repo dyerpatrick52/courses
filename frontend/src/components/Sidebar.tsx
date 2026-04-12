@@ -63,6 +63,8 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
     setSuggestions(allCourses.filter(c => c.toUpperCase().includes(q)).slice(0, 8));
   }
 
+  function clearCourses() { setSelected([]); }
+
   function addCourse(code: string) {
     if (!selectedCourses.includes(code)) setSelected(prev => [...prev, code]);
     setQuery('');
@@ -131,7 +133,11 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
         </Card>
 
         {/* Course search */}
-        <Card label="Courses">
+        <Card label="Courses" action={selectedCourses.length > 0 ? (
+          <button onClick={clearCourses} className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+            Clear all
+          </button>
+        ) : undefined}>
           <div className="relative">
             <input
               ref={inputRef}
@@ -254,10 +260,13 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
   );
 }
 
-function Card({ label, children }: { label: string; children: React.ReactNode }) {
+function Card({ label, action, children }: { label: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-3 shadow-sm">
-      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">{label}</p>
+      <div className="flex items-center justify-between mb-2.5">
+        <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{label}</p>
+        {action}
+      </div>
       {children}
     </div>
   );
