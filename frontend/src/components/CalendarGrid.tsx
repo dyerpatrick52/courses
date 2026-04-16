@@ -88,6 +88,7 @@ export default function CalendarGrid({ schedule }: Props) {
 
   const events      = generateEvents(schedule);
   const initialDate = getInitialDate(schedule);
+  const isMobile    = window.innerWidth < 768;
 
   let minMins = 7 * 60;
   let maxMins = 22 * 60;
@@ -107,11 +108,11 @@ export default function CalendarGrid({ schedule }: Props) {
   }
 
   return (
-    <div className="h-full p-4 overflow-x-auto">
-      <div className="h-full" style={{ minWidth: '560px' }}>
+    <div className="h-full p-4">
+      <div className="h-full">
       <FullCalendar
         plugins={[timeGridPlugin]}
-        initialView="timeGridWeek"
+        initialView={isMobile ? 'timeGridDay' : 'timeGridWeek'}
         initialDate={initialDate}
         firstDay={0}
         allDaySlot={false}
