@@ -7,7 +7,7 @@ export interface Term {
 export interface Course {
   subject_code: string;
   course_code: string;
-  course_name: string;
+  course_title: string;
 }
 
 export interface ScheduleMeeting {

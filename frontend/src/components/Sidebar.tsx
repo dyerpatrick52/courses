@@ -124,7 +124,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
           const courses = await fetchCourses(s.subject_code);
           courses.forEach(c => {
             results.push(c.course_code);
-            namesMap[c.course_code] = c.course_name;
+            namesMap[c.course_code] = c.course_title;
           });
         } catch { /* subject may have no courses */ }
       }));
