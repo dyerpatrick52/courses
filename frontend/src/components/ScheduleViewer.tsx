@@ -9,9 +9,10 @@ type SortKey = 'default' | 'fewest-days' | 'least-gap' | 'earliest-end' | 'lates
 
 interface Props {
   schedules: FormattedSchedule[];
+  courseNames: Record<string, string>;
 }
 
-export default function ScheduleViewer({ schedules }: Props) {
+export default function ScheduleViewer({ schedules, courseNames }: Props) {
   const [index, setIndex] = useState(0);
   const [inputVal, setInputVal] = useState('1');
   const [sortKey, setSortKey] = useState<SortKey>('default');
@@ -124,7 +125,7 @@ export default function ScheduleViewer({ schedules }: Props) {
 
       {/* Calendar */}
       <div className="flex-1 min-h-0 overflow-hidden dark:bg-gray-950">
-        <CalendarGrid schedule={current} />
+        <CalendarGrid schedule={current} courseNames={courseNames} />
       </div>
     </div>
   );

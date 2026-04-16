@@ -15,6 +15,7 @@ export default function App() {
   const { mode, cycle } = useTheme();
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [courseNames, setCourseNames] = useState<Record<string, string>>({});
 
   const availableSections = useMemo((): Record<string, string[]> => {
     const map: Record<string, Set<string>> = {};
@@ -70,7 +71,7 @@ export default function App() {
     )}
 
     <Sidebar onGenerate={handleGenerate} loading={loading} error={error} themeMode={mode} onThemeCycle={cycle} availableSections={availableSections}
-    isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} courseDateRanges={courseDateRanges} />
+    isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} courseDateRanges={courseDateRanges} onCourseNamesChange={setCourseNames} />
 
     <main className="flex-1 flex flex-col min-h-0">
       {/* Mobile top bar */}
@@ -80,7 +81,7 @@ export default function App() {
       </div>
 
       {generated ? (
-        <ScheduleViewer schedules={schedules} />
+        <ScheduleViewer schedules={schedules} courseNames={courseNames} />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400 dark:text-gray-600">
           <span className="text-5xl">🗓️</span>

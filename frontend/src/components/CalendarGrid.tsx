@@ -71,9 +71,10 @@ function getInitialDate(schedule: FormattedSchedule): Date {
 
 interface Props {
   schedule: FormattedSchedule | null;
+  courseNames: Record<string, string>;
 }
 
-export default function CalendarGrid({ schedule }: Props) {
+export default function CalendarGrid({ schedule, courseNames }: Props) {
   const [modalEvent, setModalEvent] = useState<ModalEventData | null>(null);
   const [ratings, setRatings] = useState<Map<string, RmpResult>>(new Map());
   const calendarRef = useRef<FullCalendar>(null);
@@ -131,7 +132,7 @@ export default function CalendarGrid({ schedule }: Props) {
         events={events}
         headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
         dayHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric' }}
-        eventContent={arg => renderEvent(arg, ratings)}
+        eventContent={arg => renderEvent(arg, ratings, courseNames)}
         height="100%"
         weekends={true}
         nowIndicator={true}
@@ -163,14 +164,17 @@ export default function CalendarGrid({ schedule }: Props) {
 function renderEvent(
   arg: { event: { title: string; extendedProps: Record<string, string>; startStr: string; endStr: string } },
   ratings: Map<string, RmpResult>,
+  courseNames: Record<string, string>,
 ) {
   const { component, section_code, instructor } = arg.event.extendedProps;
-  const startTime = arg.event.startStr.slice(11, 16);
-  const endTime   = arg.event.endStr.slice(11, 16);
-  const rating    = ratings.get(instructor)?.rating ?? null;
+  const startTime  = arg.event.startStr.slice(11, 16);
+  const endTime    = arg.event.endStr.slice(11, 16);
+  const rating     = ratings.get(instructor)?.rating ?? null;
+  const courseName = courseNames?.[arg.event.title];
   return (
     <div className="p-0.5 overflow-hidden h-full flex flex-col cursor-pointer">
       <div className="font-semibold leading-tight truncate">{arg.event.title}</div>
+      {courseName && <div className="opacity-75 truncate text-xs leading-tight">{courseName}</div>}
       <div className="opacity-85 truncate">{component} · {section_code}</div>
       <div className="opacity-70 truncate text-xs">
         {instructor}{rating !== null && <span className="opacity-90"> · ★ {rating.toFixed(1)}</span>}

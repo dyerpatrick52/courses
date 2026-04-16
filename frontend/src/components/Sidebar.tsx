@@ -16,6 +16,7 @@ interface Props {
     isOpen: boolean;
     onClose: () => void;
     courseDateRanges: Record<string, { start: string; end: string }>;
+    onCourseNamesChange: (names: Record<string, string>) => void;
   }
 
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -59,7 +60,7 @@ function formatDateRange(start: string, end: string): string {
 
 const URL_PARAMS = parseUrlParams();
 
-export default function Sidebar({ onGenerate, loading, error, themeMode, onThemeCycle, availableSections, isOpen, onClose, courseDateRanges }: Props) {
+export default function Sidebar({ onGenerate, loading, error, themeMode, onThemeCycle, availableSections, isOpen, onClose, courseDateRanges, onCourseNamesChange }: Props) {
   const [terms, setTerms]                 = useState<Term[]>([]);
   const [termCode, setTermCode]           = useState(() => URL_PARAMS.termCode      ?? lsGet('termCode', ''));
   const [query, setQuery]                 = useState('');
@@ -72,6 +73,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
   const [earliestStart, setEarliestStart] = useState(() => URL_PARAMS.earliestStart ?? lsGet('earliestStart', ''));
   const [latestEnd, setLatestEnd]         = useState(() => URL_PARAMS.latestEnd     ?? lsGet('latestEnd', ''));
   const [allowedSections, setAllowedSections] = useState<Record<string, string[]>>({});
+  const [courseNames, setCourseNames]         = useState<Record<string, string>>({});
   const [copied, setCopied]               = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevTermCode = useRef<string | null>(null);
@@ -116,13 +118,19 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
     prevTermCode.current = termCode;
     fetch('/api/subjects').then(r => r.json()).then(async (subjects: { subject_code: string }[]) => {
       const results: string[] = [];
+      const namesMap: Record<string, string> = {};
       await Promise.all(subjects.map(async s => {
         try {
           const courses = await fetchCourses(s.subject_code);
-          results.push(...courses.map((c: { course_code: string }) => c.course_code));
+          courses.forEach(c => {
+            results.push(c.course_code);
+            namesMap[c.course_code] = c.course_name;
+          });
         } catch { /* subject may have no courses */ }
       }));
       setAllCourses(results.sort());
+      setCourseNames(namesMap);
+      onCourseNamesChange(namesMap);
     });
   }, [termCode]);
 
@@ -266,8 +274,11 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
               return (
                 <div key={c}>
                   <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 text-sm text-gray-800 dark:text-gray-200">
-                    <span className="font-medium">{c}</span>
-                    <button className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors ml-2" onClick={() => removeCourse(c)}>✕</button>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-medium">{c}</span>
+                      {courseNames[c] && <span className="text-xs text-gray-400 dark:text-gray-500 truncate">{courseNames[c]}</span>}
+                    </div>
+                    <button className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors ml-2 shrink-0" onClick={() => removeCourse(c)}>✕</button>
                   </div>
                   {courseDateRanges[c] && (
                     <p className="text-xs text-gray-400 dark:text-gray-500 pl-1 mt-0.5">
