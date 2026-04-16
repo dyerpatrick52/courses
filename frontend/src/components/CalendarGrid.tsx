@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
 import FullCalendar from '@fullcalendar/react';
+import type { CalendarApi } from '@fullcalendar/core';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import type { EventInput } from '@fullcalendar/core';
 import type { FormattedSchedule } from '../api/types';
 import { getCourseColor } from '../utils/colors';
 import { fetchRmpRating, type RmpResult } from '../api/client';
 import EventModal, { type ModalEventData } from './EventModal';
+import {useState, useEffect, useRef} from 'react';
 
 const DAY_MAP: Record<string, number> = {
   Su: 0, Mo: 1, Tu: 2, We: 3, Th: 4, Fr: 5, Sa: 6,
@@ -75,6 +76,7 @@ interface Props {
 export default function CalendarGrid({ schedule }: Props) {
   const [modalEvent, setModalEvent] = useState<ModalEventData | null>(null);
   const [ratings, setRatings] = useState<Map<string, RmpResult>>(new Map());
+  const calendarRef = useRef<FullCalendar>(null);
 
   useEffect(() => {
     if (!schedule) return;
@@ -84,6 +86,12 @@ export default function CalendarGrid({ schedule }: Props) {
       .then(pairs => setRatings(new Map(pairs)));
   }, [schedule]);
 
+  useEffect(() => {
+    if (!schedule || !calendarRef.current) return;
+    const api: CalendarApi = calendarRef.current.getApi();
+    api.gotoDate(getInitialDate(schedule));
+  }, [schedule]);
+  
   if (!schedule) return null;
 
   const events      = generateEvents(schedule);
@@ -128,6 +136,7 @@ export default function CalendarGrid({ schedule }: Props) {
         weekends={true}
         nowIndicator={true}
         eventMinHeight={24}
+        ref={calendarRef}
         eventClick={info => {
           const p = info.event.extendedProps;
           setModalEvent({
