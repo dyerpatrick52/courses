@@ -7,13 +7,15 @@ const THEME_ICON: Record<ThemeMode, string> = { system: '💻', light: '☀️',
 const THEME_LABEL: Record<ThemeMode, string> = { system: 'System', light: 'Light', dark: 'Dark' };
 
 interface Props {
-  onGenerate: (req: GenerateRequest) => void;
-  loading: boolean;
-  error: string | null;
-  themeMode: ThemeMode;
-  onThemeCycle: () => void;
-  availableSections: Record<string, string[]>;
-}
+    onGenerate: (req: GenerateRequest) => void;
+    loading: boolean;
+    error: string | null;
+    themeMode: ThemeMode;
+    onThemeCycle: () => void;
+    availableSections: Record<string, string[]>;
+    isOpen: boolean;
+    onClose: () => void;
+  }
 
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const DAY_LABELS: Record<string, string> = {
@@ -51,7 +53,7 @@ function buildUrl(req: GenerateRequest): string {
 
 const URL_PARAMS = parseUrlParams();
 
-export default function Sidebar({ onGenerate, loading, error, themeMode, onThemeCycle, availableSections }: Props) {
+export default function Sidebar({ onGenerate, loading, error, themeMode, onThemeCycle, availableSections, isOpen, onClose }: Props) {
   const [terms, setTerms]                 = useState<Term[]>([]);
   const [termCode, setTermCode]           = useState(() => URL_PARAMS.termCode      ?? lsGet('termCode', ''));
   const [query, setQuery]                 = useState('');
@@ -175,10 +177,12 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
   }
 
   return (
-    <div className="dark-scroll w-72 shrink-0 h-full flex flex-col bg-gray-100 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 overflow-y-auto shadow-xl">
-
+  <div className={`dark-scroll fixed md:relative inset-y-0 left-0 z-40 md:z-auto w-72 shrink-0 h-full flex flex-col bg-gray-100 dark:bg-gray-950 border-r
+    border-gray-200 dark:border-gray-800 overflow-y-auto shadow-xl transform transition-transform duration-200 ${isOpen ? 'translate-x-0' :
+    '-translate-x-full'} md:translate-x-0`}>
       {/* Branding */}
       <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-800">
+        
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-sm font-bold"
             style={{ background: 'var(--accent)' }}>
@@ -194,6 +198,8 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
           <span>{THEME_ICON[themeMode]}</span>
           <span className="text-gray-500">{THEME_LABEL[themeMode]}</span>
         </button>
+        <button onClick={onClose} className="md:hidden ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg leading-none" aria-label="Close
+        menu">×</button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">

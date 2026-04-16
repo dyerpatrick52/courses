@@ -107,7 +107,8 @@ export default function CalendarGrid({ schedule }: Props) {
   }
 
   return (
-    <div className="h-full p-4">
+    <div className="h-full p-4 overflow-x-auto">
+      <div className="h-full" style={{ minWidth: '560px' }}>
       <FullCalendar
         plugins={[timeGridPlugin]}
         initialView="timeGridWeek"
@@ -140,9 +141,11 @@ export default function CalendarGrid({ schedule }: Props) {
           });
         }}
       />
+      
       {modalEvent && (
         <EventModal event={modalEvent} onClose={() => setModalEvent(null)} />
       )}
+      </div>
     </div>
   );
 }
