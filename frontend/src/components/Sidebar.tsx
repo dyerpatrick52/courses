@@ -15,6 +15,7 @@ interface Props {
     availableSections: Record<string, string[]>;
     isOpen: boolean;
     onClose: () => void;
+    courseDateRanges: Record<string, { start: string; end: string }>;
   }
 
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -51,9 +52,14 @@ function buildUrl(req: GenerateRequest): string {
   return '?' + p.toString();
 }
 
+function formatDateRange(start: string, end: string): string {
+    const fmt = (s: string) => new Date(s + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    return `${fmt(start)} – ${fmt(end)}`;
+  }
+
 const URL_PARAMS = parseUrlParams();
 
-export default function Sidebar({ onGenerate, loading, error, themeMode, onThemeCycle, availableSections, isOpen, onClose }: Props) {
+export default function Sidebar({ onGenerate, loading, error, themeMode, onThemeCycle, availableSections, isOpen, onClose, courseDateRanges }: Props) {
   const [terms, setTerms]                 = useState<Term[]>([]);
   const [termCode, setTermCode]           = useState(() => URL_PARAMS.termCode      ?? lsGet('termCode', ''));
   const [query, setQuery]                 = useState('');
@@ -263,6 +269,11 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
                     <span className="font-medium">{c}</span>
                     <button className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors ml-2" onClick={() => removeCourse(c)}>✕</button>
                   </div>
+                  {courseDateRanges[c] && (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 pl-1 mt-0.5">
+                      {formatDateRange(courseDateRanges[c].start, courseDateRanges[c].end)}
+                    </p>
+                  )}
                   {letters.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1 pl-1">
                       {letters.map(letter => {

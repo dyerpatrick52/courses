@@ -30,6 +30,23 @@ export default function App() {
     return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, [...v].sort()]));
   }, [schedules]);
 
+  const courseDateRanges = useMemo((): Record<string, { start: string; end: string }> => {
+    const map: Record<string, { start: string; end: string }> = {};
+    for (const schedule of schedules) {
+      for (const [courseCode, courseData] of Object.entries(schedule)) {
+        for (const meeting of courseData.meetings) {
+          if (!map[courseCode]) {
+            map[courseCode] = { start: meeting.date_start, end: meeting.date_end };
+          } else {
+            if (meeting.date_start < map[courseCode].start) map[courseCode].start = meeting.date_start;
+            if (meeting.date_end > map[courseCode].end) map[courseCode].end = meeting.date_end;
+          }
+        }
+      }
+    }
+    return map;
+  }, [schedules]);
+
   async function handleGenerate(req: GenerateRequest) {
     setLoading(true);
     setError(null);
@@ -53,7 +70,7 @@ export default function App() {
     )}
 
     <Sidebar onGenerate={handleGenerate} loading={loading} error={error} themeMode={mode} onThemeCycle={cycle} availableSections={availableSections}
-    isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} courseDateRanges={courseDateRanges} />
 
     <main className="flex-1 flex flex-col min-h-0">
       {/* Mobile top bar */}
