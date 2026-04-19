@@ -53,6 +53,14 @@ function buildUrl(req: GenerateRequest): string {
   return '?' + p.toString();
 }
 
+function normalizeTime(val: string): string {
+  const digits = val.replace(/\D/g, '');
+  if (!digits) return val;
+  if (digits.length <= 2) return `${digits.padStart(2, '0')}:00`;
+  if (digits.length === 3) return `${digits[0].padStart(2, '0')}:${digits.slice(1)}`.replace(/^(\d)/, '0$1');
+  return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+}
+
 function formatDateRange(start: string, end: string): string {
     const fmt = (s: string) => new Date(s + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
     return `${fmt(start)} – ${fmt(end)}`;
@@ -244,7 +252,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
               ref={inputRef}
               type="text"
               className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-red-700"
-              placeholder="Search e.g. MAT1320 or Calculus I"
+              placeholder="Search e.g. MAT 1320 or Calculus I"
               value={query}
               onChange={e => handleQueryChange(e.target.value)}
               onKeyDown={e => {
@@ -347,6 +355,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
                 placeholder="HH:MM"
                 value={earliestStart}
                 onChange={e => setEarliestStart(e.target.value)}
+                onBlur={e => setEarliestStart(normalizeTime(e.target.value))}
               />
             </div>
             <div className="flex items-center justify-between gap-2">
@@ -357,6 +366,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
                 placeholder="HH:MM"
                 value={latestEnd}
                 onChange={e => setLatestEnd(e.target.value)}
+                onBlur={e => setLatestEnd(normalizeTime(e.target.value))}
               />
             </div>
           </div>
@@ -391,6 +401,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
                   placeholder="HH:MM"
                   value={block.start}
                   onChange={e => setBlockedTimes(prev => prev.map((b, j) => j === i ? { ...b, start: e.target.value } : b))}
+                  onBlur={e => setBlockedTimes(prev => prev.map((b, j) => j === i ? { ...b, start: normalizeTime(e.target.value) } : b))}
                   className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-1 py-1 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-red-700 w-14 text-center"
                 />
                 <span className="text-xs text-gray-400">–</span>
@@ -399,6 +410,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
                   placeholder="HH:MM"
                   value={block.end}
                   onChange={e => setBlockedTimes(prev => prev.map((b, j) => j === i ? { ...b, end: e.target.value } : b))}
+                  onBlur={e => setBlockedTimes(prev => prev.map((b, j) => j === i ? { ...b, end: normalizeTime(e.target.value) } : b))}
                   className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-1 py-1 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-red-700 w-14 text-center"
                 />
                 <button
