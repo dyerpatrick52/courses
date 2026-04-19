@@ -14,6 +14,7 @@ export default function App() {
   const [generated, setGenerated] = useState(false);
   const { mode, cycle } = useTheme();
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [rmpDisclaimerOpen, setRmpDisclaimerOpen] = useState(() => !localStorage.getItem('rmpDisclaimerSeen'));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [courseNames, setCourseNames] = useState<Record<string, string>>({});
 
@@ -99,6 +100,26 @@ export default function App() {
         </span>
       </footer>
       {privacyOpen && <PrivacyModal onClose={() => setPrivacyOpen(false)} />}
+      {rmpDisclaimerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-sm w-full mx-4 p-6 text-sm text-gray-700 dark:text-gray-300">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">About RMP Ratings</h2>
+            <p className="text-gray-500 dark:text-gray-400 mb-4">
+              Professor ratings shown in this app are sourced from <span className="font-medium text-gray-700 dark:text-gray-200">Rate My Professors</span> and may be incomplete, outdated, or based on a small number of reviews. They are provided for convenience only — please do your own research before making course decisions.
+            </p>
+            <button
+              onClick={() => {
+                localStorage.setItem('rmpDisclaimerSeen', '1');
+                setRmpDisclaimerOpen(false);
+              }}
+              className="w-full py-2 rounded-lg text-white text-sm font-semibold transition-colors"
+              style={{ background: 'var(--accent)' }}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   </div>
   );
