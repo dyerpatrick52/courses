@@ -244,7 +244,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
               ref={inputRef}
               type="text"
               className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-red-700"
-              placeholder="Search e.g. CSI 3104"
+              placeholder="Search e.g. MAT1320 or Calculus I"
               value={query}
               onChange={e => handleQueryChange(e.target.value)}
               onKeyDown={e => {

@@ -78,6 +78,8 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
   const [modalEvent, setModalEvent] = useState<ModalEventData | null>(null);
   const [ratings, setRatings] = useState<Map<string, RmpResult>>(new Map());
   const calendarRef = useRef<FullCalendar>(null);
+  const scrollRef   = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef(0);
 
   useEffect(() => {
     if (!schedule) return;
@@ -98,6 +100,7 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
   const events      = generateEvents(schedule);
   const initialDate = getInitialDate(schedule);
   const isMobile    = window.innerWidth < 768;
+  const MOBILE_CAL_WIDTH = 650;
 
   let minMins = 7 * 60;
   let maxMins = 22 * 60;
@@ -117,11 +120,21 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
   }
 
   return (
-    <div className="h-full p-4">
-      <div className="h-full">
+    <div
+      ref={scrollRef}
+      className="h-full p-4 overflow-x-auto"
+      onTouchStart={e => { touchStartX.current = e.touches[0].clientX; }}
+      onTouchMove={e => {
+        if (!scrollRef.current) return;
+        const dx = touchStartX.current - e.touches[0].clientX;
+        scrollRef.current.scrollLeft += dx;
+        touchStartX.current = e.touches[0].clientX;
+      }}
+    >
+      <div style={isMobile ? { width: `${MOBILE_CAL_WIDTH}px`, height: '100%' } : { height: '100%' }}>
       <FullCalendar
         plugins={[timeGridPlugin]}
-        initialView={isMobile ? 'timeGridDay' : 'timeGridWeek'}
+        initialView="timeGridWeek"
         initialDate={initialDate}
         firstDay={0}
         allDaySlot={false}
