@@ -128,7 +128,7 @@ export default function ScheduleViewer({ schedules, courseNames }: Props) {
       <ScheduleStats stats={stats} />
 
       {/* Calendar */}
-      <div className="flex-1 min-h-0 overflow-hidden dark:bg-gray-950">
+      <div className="flex-1 min-h-0 overflow-y-hidden dark:bg-gray-950">
         <CalendarGrid schedule={current} courseNames={courseNames} />
       </div>
     </div>
