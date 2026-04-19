@@ -10,7 +10,7 @@ export interface GenerateRequest {
     no_three_in_row?: boolean;
     earliest_start?: string;                      // e.g. "09:00"
     latest_end?: string;                          // e.g. "17:00"
-    blocked_times?: { start: string; end: string }[]; // e.g. [{ start: "12:00", end: "13:00" }]
+    blocked_times?: { day: string; start: string; end: string }[]; // e.g. [{ day: "Tu", start: "13:00", end: "15:00" }]
   };
 }
 
@@ -122,10 +122,11 @@ export function hasEndAfter(schedule: ScheduleSectionRow[], latest_end: string):
   );
 }
 
-export function hasBlockedTime(schedule: ScheduleSectionRow[], blockedTimes: { start: string; end: string }[]): boolean {
+export function hasBlockedTime(schedule: ScheduleSectionRow[], blockedTimes: { day: string; start: string; end: string }[]): boolean {
   return schedule.some(row =>
     parseDayTimes(row.days_times).some(meeting =>
       blockedTimes.some(block => {
+        if (block.day && block.day !== meeting.day) return false;
         const bStart = timeToMinutes(block.start);
         const bEnd   = timeToMinutes(block.end);
         return meeting.start < bEnd && bStart < meeting.end;

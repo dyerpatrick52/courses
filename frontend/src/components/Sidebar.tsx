@@ -74,7 +74,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
   const [latestEnd, setLatestEnd]         = useState(() => URL_PARAMS.latestEnd     ?? lsGet('latestEnd', ''));
   const [allowedSections, setAllowedSections] = useState<Record<string, string[]>>({});
   const [courseNames, setCourseNames]         = useState<Record<string, string>>({});
-  const [blockedTimes, setBlockedTimes]       = useState<{ start: string; end: string }[]>([]);
+  const [blockedTimes, setBlockedTimes]       = useState<{ day: string; start: string; end: string }[]>([]);
   const [copied, setCopied]               = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevTermCode = useRef<string | null>(null);
@@ -365,7 +365,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
         {/* Blocked times */}
         <Card label="Time Off" action={
           <button
-            onClick={() => setBlockedTimes(prev => [...prev, { start: '', end: '' }])}
+            onClick={() => setBlockedTimes(prev => [...prev, { day: 'Mo', start: '', end: '' }])}
             className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
           >
             + Add
@@ -377,12 +377,21 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
           <div className="space-y-1.5">
             {blockedTimes.map((block, i) => (
               <div key={i} className="flex items-center gap-1.5">
+                <select
+                  value={block.day}
+                  onChange={e => setBlockedTimes(prev => prev.map((b, j) => j === i ? { ...b, day: e.target.value } : b))}
+                  className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-1 py-1 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-red-700"
+                >
+                  {DAYS.filter(d => d !== 'Su' && d !== 'Sa').concat(['Su', 'Sa']).map(d => (
+                    <option key={d} value={d}>{DAY_LABELS[d]}</option>
+                  ))}
+                </select>
                 <input
                   type="text"
                   placeholder="HH:MM"
                   value={block.start}
                   onChange={e => setBlockedTimes(prev => prev.map((b, j) => j === i ? { ...b, start: e.target.value } : b))}
-                  className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-red-700 w-16 text-center"
+                  className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-1 py-1 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-red-700 w-14 text-center"
                 />
                 <span className="text-xs text-gray-400">–</span>
                 <input
@@ -390,7 +399,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
                   placeholder="HH:MM"
                   value={block.end}
                   onChange={e => setBlockedTimes(prev => prev.map((b, j) => j === i ? { ...b, end: e.target.value } : b))}
-                  className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-red-700 w-16 text-center"
+                  className="bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-1 py-1 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:border-red-700 w-14 text-center"
                 />
                 <button
                   onClick={() => setBlockedTimes(prev => prev.filter((_, j) => j !== i))}
