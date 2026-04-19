@@ -132,6 +132,7 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
         slotLabelInterval="01:00:00"
         events={events}
         headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+        buttonText={{ prev: '← Prev Week', next: 'Next Week →', today: 'Today' }}
         dayHeaderFormat={isMobile ? { weekday: 'short' } : { weekday: 'short', month: 'numeric', day: 'numeric' }}
         eventContent={arg => renderEvent(arg, ratings, courseNames)}
         height="100%"

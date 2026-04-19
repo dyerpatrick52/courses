@@ -62,9 +62,9 @@ export default function ScheduleViewer({ schedules, courseNames }: Props) {
           <button
             onClick={() => goTo(index - 1)}
             disabled={index === 0}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors text-sm shrink-0"
+            className="flex items-center gap-1 px-2 h-8 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors text-xs shrink-0"
           >
-            ←
+            ← <span>Prev. Schedule</span>
           </button>
 
           <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
@@ -86,9 +86,9 @@ export default function ScheduleViewer({ schedules, courseNames }: Props) {
           <button
             onClick={() => goTo(index + 1)}
             disabled={index === total - 1}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors text-sm shrink-0"
+            className="flex items-center gap-1 px-2 h-8 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors text-xs shrink-0"
           >
-            →
+            <span>Next Schedule</span> →
           </button>
 
           {/* Export buttons */}
