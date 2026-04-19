@@ -8,30 +8,37 @@ import ScheduleViewer from './components/ScheduleViewer';
 import PrivacyModal from './components/PrivacyModal';
 
 export default function App() {
-  const [schedules, setSchedules] = useState<FormattedSchedule[]>([]);
+  const [schedules, setSchedules] = useState<FormattedSchedule[]>([]); // all schedules returned from the API
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
-  const [generated, setGenerated] = useState(false);
+  const [generated, setGenerated] = useState(false); // true once the user has clicked Generate at least once
   const { mode, cycle } = useTheme();
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  // initialize from localStorage so the disclaimer doesn't re-appear after the user dismisses it
   const [rmpDisclaimerOpen, setRmpDisclaimerOpen] = useState(() => !localStorage.getItem('rmpDisclaimerSeen'));
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [courseNames, setCourseNames] = useState<Record<string, string>>({});
+  const [sidebarOpen, setSidebarOpen] = useState(false); // controls the mobile drawer
+  const [courseNames, setCourseNames] = useState<Record<string, string>>({}); // code → title map from Sidebar
 
+  // derive which section letters are available for each course across all generated schedules.
+  // useMemo prevents this from recalculating on every render — it only runs when `schedules` changes.
   const availableSections = useMemo((): Record<string, string[]> => {
     const map: Record<string, Set<string>> = {};
     for (const schedule of schedules) {
       for (const [courseCode, courseData] of Object.entries(schedule)) {
         if (!map[courseCode]) map[courseCode] = new Set();
         for (const meeting of courseData.meetings) {
+          // section_code looks like "A01" — we only want the letter prefix ("A")
           const letter = meeting.section_code.match(/^[A-Za-z]+/)?.[0];
           if (letter) map[courseCode].add(letter);
         }
       }
     }
+    // convert each Set to a sorted array so the UI shows them in a consistent order
     return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, [...v].sort()]));
   }, [schedules]);
 
+  // derive the overall date range for each course (earliest start, latest end across all schedules).
+  // this is displayed as session dates under each course chip in the sidebar.
   const courseDateRanges = useMemo((): Record<string, { start: string; end: string }> => {
     const map: Record<string, { start: string; end: string }> = {};
     for (const schedule of schedules) {
@@ -40,6 +47,7 @@ export default function App() {
           if (!map[courseCode]) {
             map[courseCode] = { start: meeting.date_start, end: meeting.date_end };
           } else {
+            // string comparison works here because dates are in "YYYY-MM-DD" format (lexicographically sortable)
             if (meeting.date_start < map[courseCode].start) map[courseCode].start = meeting.date_start;
             if (meeting.date_end > map[courseCode].end) map[courseCode].end = meeting.date_end;
           }
@@ -49,10 +57,11 @@ export default function App() {
     return map;
   }, [schedules]);
 
+  // called when the user clicks "Generate Schedules" in the sidebar
   async function handleGenerate(req: GenerateRequest) {
     setLoading(true);
     setError(null);
-    resetCourseColors();
+    resetCourseColors(); // clear the color assignments so new courses get fresh colors
     try {
       const res = await generateSchedules(req);
       setSchedules(res.schedules);
@@ -60,13 +69,13 @@ export default function App() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
-      setLoading(false);
+      setLoading(false); // always runs, even if the request threw
     }
   }
 
   return (
      <div className="flex h-screen w-screen overflow-hidden bg-white dark:bg-gray-950">
-    {/* Mobile overlay backdrop */}
+    {/* semi-transparent overlay behind the sidebar on mobile — clicking it closes the sidebar */}
     {sidebarOpen && (
       <div className="md:hidden fixed inset-0 z-30 bg-black/40" onClick={() => setSidebarOpen(false)} />
     )}
@@ -75,12 +84,13 @@ export default function App() {
     isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} courseDateRanges={courseDateRanges} onCourseNamesChange={setCourseNames} />
 
     <main className="flex-1 flex flex-col min-h-0">
-      {/* Mobile top bar */}
+      {/* hamburger button — only visible on mobile (hidden on md and up) */}
       <div className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shrink-0">
         <button onClick={() => setSidebarOpen(true)} className="text-gray-600 dark:text-gray-300 text-xl leading-none">☰</button>
         <span className="font-semibold text-sm text-gray-900 dark:text-white">UOScheduler</span>
       </div>
 
+      {/* show the schedule viewer if the user has generated schedules, otherwise show the placeholder */}
       {generated ? (
         <ScheduleViewer schedules={schedules} courseNames={courseNames} />
       ) : (
@@ -100,6 +110,8 @@ export default function App() {
         </span>
       </footer>
       {privacyOpen && <PrivacyModal onClose={() => setPrivacyOpen(false)} />}
+
+      {/* one-time disclaimer shown until the user clicks "Got it" — state persists in localStorage */}
       {rmpDisclaimerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-sm w-full mx-4 p-6 text-sm text-gray-700 dark:text-gray-300">
@@ -109,7 +121,7 @@ export default function App() {
             </p>
             <button
               onClick={() => {
-                localStorage.setItem('rmpDisclaimerSeen', '1');
+                localStorage.setItem('rmpDisclaimerSeen', '1'); // remember that the user has seen this
                 setRmpDisclaimerOpen(false);
               }}
               className="w-full py-2 rounded-lg text-white text-sm font-semibold transition-colors"
