@@ -8,8 +8,9 @@ export interface GenerateRequest {
     free_days?: string[];                         // e.g. ["Fr"]
     no_back_to_back?: boolean;
     no_three_in_row?: boolean;
-    earliest_start?: string;                        // e.g. "09:00"
-    latest_end?: string;                        // e.g. "17:00"
+    earliest_start?: string;                      // e.g. "09:00"
+    latest_end?: string;                          // e.g. "17:00"
+    blocked_times?: { start: string; end: string }[]; // e.g. [{ start: "12:00", end: "13:00" }]
   };
 }
 
@@ -87,12 +88,13 @@ export async function generateSchedules(req: GenerateRequest): Promise<Formatted
   }
 
   if (req.filters) {
-    const { free_days, no_back_to_back, no_three_in_row, earliest_start, latest_end } = req.filters;
-    if (free_days?.length)   validSchedules = validSchedules.filter(s => !hasMeetingsOnDays(s, free_days));
-    if (earliest_start)        validSchedules = validSchedules.filter(s => !hasStartBefore(s, earliest_start)); //earliest start
-    if (latest_end)        validSchedules = validSchedules.filter(s => !hasEndAfter(s, latest_end));    //latest end
-    if (no_back_to_back)     validSchedules = validSchedules.filter(s => !hasBackToBack(s));
-    if (no_three_in_row)     validSchedules = validSchedules.filter(s => !hasThreeInRow(s));
+    const { free_days, no_back_to_back, no_three_in_row, earliest_start, latest_end, blocked_times } = req.filters;
+    if (free_days?.length)        validSchedules = validSchedules.filter(s => !hasMeetingsOnDays(s, free_days));
+    if (earliest_start)           validSchedules = validSchedules.filter(s => !hasStartBefore(s, earliest_start));
+    if (latest_end)               validSchedules = validSchedules.filter(s => !hasEndAfter(s, latest_end));
+    if (no_back_to_back)          validSchedules = validSchedules.filter(s => !hasBackToBack(s));
+    if (no_three_in_row)          validSchedules = validSchedules.filter(s => !hasThreeInRow(s));
+    if (blocked_times?.length)    validSchedules = validSchedules.filter(s => !hasBlockedTime(s, blocked_times));
   }
 
 
@@ -117,6 +119,18 @@ export function hasEndAfter(schedule: ScheduleSectionRow[], latest_end: string):
   const latest_end_time = timeToMinutes(latest_end);
   return schedule.some(row => 
     parseDayTimes(row.days_times).some(meeting => (meeting.end > latest_end_time))
+  );
+}
+
+export function hasBlockedTime(schedule: ScheduleSectionRow[], blockedTimes: { start: string; end: string }[]): boolean {
+  return schedule.some(row =>
+    parseDayTimes(row.days_times).some(meeting =>
+      blockedTimes.some(block => {
+        const bStart = timeToMinutes(block.start);
+        const bEnd   = timeToMinutes(block.end);
+        return meeting.start < bEnd && bStart < meeting.end;
+      })
+    )
   );
 }
 

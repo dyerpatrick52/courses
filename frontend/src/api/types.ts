@@ -37,6 +37,7 @@ export interface GenerateRequest {
     no_three_in_row?: boolean;
     earliest_start?: string;
     latest_end?: string;
+    blocked_times?: { start: string; end: string }[];
   };
 }
 
