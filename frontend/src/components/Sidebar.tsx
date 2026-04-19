@@ -138,7 +138,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
     setQuery(val);
     if (!val.trim()) { setSuggestions([]); return; }
     const q = val.toUpperCase();
-    setSuggestions(allCourses.filter(c => c.toUpperCase().includes(q)).slice(0, 8));
+    setSuggestions(allCourses.filter(c => c.toUpperCase().includes(q) || (courseNames[c] ?? '').toUpperCase().includes(q)).slice(0, 8));
   }
 
   function clearCourses() { setSelected([]); }
@@ -257,7 +257,8 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
                     className="px-2.5 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer first:rounded-t-md last:rounded-b-md"
                     onMouseDown={() => addCourse(s)}
                   >
-                    {s}
+                    <div className="font-medium">{s}</div>
+                    {courseNames[s] && <div className="text-xs text-gray-400 dark:text-gray-500 truncate">{courseNames[s]}</div>}
                   </li>
                 ))}
               </ul>
