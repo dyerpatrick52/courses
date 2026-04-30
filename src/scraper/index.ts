@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { launchBrowser, closeBrowser } from './browser';
 import { navigateToSearchPage } from './navigation';
 import { scrapeTerms } from './terms';
@@ -99,11 +100,11 @@ async function scrapeLiveSections(page: import('playwright').Page, stats: RunSta
   await withRetry(() => navigateToSearchPage(page));
   const terms = await withRetry(() => scrapeTerms(page));
 
-  const termFilter = process.env.TERM_FILTER?.toLowerCase();
-  const filteredTerms = termFilter
-    ? terms.filter(t => t.term_name.toLowerCase().includes(termFilter))
+  const termFilters = process.env.TERM_FILTER?.toLowerCase().split(',').map(s => s.trim()).filter(Boolean) ?? [];
+  const filteredTerms = termFilters.length
+    ? terms.filter(t => termFilters.some(f => t.term_name.toLowerCase().includes(f)))
     : terms;
-  console.log(`[scraper] Found ${filteredTerms.length} term(s)${termFilter ? ` (filter: "${termFilter}")` : ''}`);
+  console.log(`[scraper] Found ${filteredTerms.length} term(s)${termFilters.length ? ` (filter: "${termFilters.join(', ')}")` : ''}`);
 
   const subjectLimit = process.env.SUBJECT_LIMIT ? parseInt(process.env.SUBJECT_LIMIT) : undefined;
   if (subjectLimit) console.log(`[scraper] Subject limit: ${subjectLimit}`);

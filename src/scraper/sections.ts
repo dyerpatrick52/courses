@@ -3,10 +3,10 @@ import {
   navigateToSearchPage,
   selectTerm,
   selectSubjectFromLookup,
-  fillCatalogNumber,
+  expandAdditionalCriteria,
+  checkYearOfStudy,
   uncheckOpenOnly,
   runSearch,
-  dismissPopup,
   readText,
 } from './navigation';
 
@@ -34,7 +34,6 @@ export async function scrapeSectionsForSubject(
   page: Page,
   termCode: string,
   subjectCode: string,
-  courseCodes: string[] = []
 ): Promise<ScrapedCourseSections[]> {
   await navigateToSearchPage(page);
   await selectTerm(page, termCode);
@@ -48,9 +47,8 @@ export async function scrapeSectionsForSubject(
     return [];
   }
   if (popup === 'too_many') {
-    console.log(`[scraper]     ${subjectCode} has >300 sections — falling back to course-by-course`);
-    await dismissPopup(page);
-    return scrapeSectionsByCourse(page, termCode, subjectCode, courseCodes);
+    console.log(`[scraper]     ${subjectCode} has >300 sections — falling back to year-by-year`);
+    return scrapeSectionsByYear(page, termCode, subjectCode);
   }
 
   const hasResults = await checkForResults(page);
@@ -80,35 +78,47 @@ async function checkForPopup(page: Page): Promise<PopupKind | null> {
   return 'too_many';
 }
 
-// Searches the class search once per course number for subjects that return
-// a >300 sections popup when searched by subject alone.
-async function scrapeSectionsByCourse(
+const YEAR_LABELS = ['1st', '2nd', '3rd', '4th', 'Graduate'];
+
+// Searches once per year-of-study checkbox for subjects that return a >300
+// sections popup when searched by subject alone.
+async function scrapeSectionsByYear(
   page: Page,
   termCode: string,
   subjectCode: string,
-  courseCodes: string[]
 ): Promise<ScrapedCourseSections[]> {
   const allResults: ScrapedCourseSections[] = [];
 
-  for (const courseCode of courseCodes) {
-    const catalogNbr = courseCode.replace(/\D/g, '');
+  for (let yearIndex = 0; yearIndex < YEAR_LABELS.length; yearIndex++) {
+    console.log(`[scraper]       Year: ${YEAR_LABELS[yearIndex]}`);
     await navigateToSearchPage(page);
     await selectTerm(page, termCode);
     await selectSubjectFromLookup(page, subjectCode);
-    await fillCatalogNumber(page, catalogNbr);
+    await expandAdditionalCriteria(page);
+    await checkYearOfStudy(page, yearIndex);
     await uncheckOpenOnly(page);
     await runSearch(page);
     await waitForSearchRender(page);
 
     const popup = await checkForPopup(page);
-    if (popup === 'no_results') { continue; }
-    if (popup === 'too_many') { await dismissPopup(page); continue; }
+    if (popup === 'no_results') continue;
+    if (popup === 'too_many') continue;
 
     const hasResults = await checkForResults(page);
     if (!hasResults) continue;
 
     const results = await scrapeAllCourseGroups(page);
-    allResults.push(...results);
+    for (const r of results) {
+      const existing = allResults.find(a => a.course_code === r.course_code);
+      if (existing) {
+        const seen = new Set(existing.sections.map(s => s.section_code));
+        for (const s of r.sections) {
+          if (!seen.has(s.section_code)) existing.sections.push(s);
+        }
+      } else {
+        allResults.push(r);
+      }
+    }
   }
 
   return allResults;

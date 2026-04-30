@@ -15,6 +15,16 @@ const SELECTORS = {
   openOnlyCheckbox: '#SSR_CLSRCH_WRK_SSR_OPEN_ONLY\\$0',
 };
 
+// Year of study checkboxes in the Additional Search Criteria section.
+// Indices 0–4 correspond to 1st, 2nd, 3rd, 4th, and Graduate.
+const YEAR_OF_STUDY_SELECTORS = [
+  '#UO_PUB_SRCH_WRK_SSR_RPTCK_OPT_01\\$0',
+  '#UO_PUB_SRCH_WRK_SSR_RPTCK_OPT_02\\$0',
+  '#UO_PUB_SRCH_WRK_SSR_RPTCK_OPT_03\\$0',
+  '#UO_PUB_SRCH_WRK_SSR_RPTCK_OPT_04\\$0',
+  '#UO_PUB_SRCH_WRK_GRADUATED_TBL_CD\\$0',
+];
+
 // Loads the search page fresh. Called before every subject search to reset
 // any leftover state from the previous search.
 export async function navigateToSearchPage(page: Page): Promise<void> {
@@ -64,6 +74,27 @@ export async function runSearch(page: Page): Promise<void> {
 export async function dismissPopup(page: Page): Promise<void> {
   await page.click('#okbutton');
   await page.waitForLoadState('networkidle', { timeout: 100000 });
+}
+
+// Expands the "Additional Search Criteria" section if the year checkboxes are
+// not yet visible. On a fresh page load they are hidden behind this toggle.
+export async function expandAdditionalCriteria(page: Page): Promise<void> {
+  const yearCheckbox = await page.$(YEAR_OF_STUDY_SELECTORS[0]);
+  if (yearCheckbox && await yearCheckbox.isVisible()) return;
+  await page.click('text=Additional Search Criteria').catch(() => {});
+  await page.waitForTimeout(1000);
+}
+
+// Checks one of the Year of Study checkboxes (0 = 1st, 1 = 2nd, … 4 = Graduate).
+// Assumes expandAdditionalCriteria() has already been called.
+export async function checkYearOfStudy(page: Page, yearIndex: number): Promise<void> {
+  const selector = YEAR_OF_STUDY_SELECTORS[yearIndex];
+  if (!selector) return;
+  const checkbox = await page.$(selector);
+  if (checkbox && !(await checkbox.isChecked())) {
+    await checkbox.click();
+    await page.waitForTimeout(500);
+  }
 }
 
 // Reads the visible text of a single element. Returns '' if the element
