@@ -5,10 +5,12 @@ import {
   selectSubjectFromLookup,
   expandAdditionalCriteria,
   checkYearOfStudy,
+  fillCatalogNumber,
   uncheckOpenOnly,
   runSearch,
   readText,
 } from './navigation';
+import { getCoursesBySubjectCode } from '../db/queries/courses';
 
 // Top-level result grouping sections by course code. One subject search
 // returns results for every course in that subject that has sections this term.
@@ -88,6 +90,7 @@ async function scrapeSectionsByYear(
   subjectCode: string,
 ): Promise<ScrapedCourseSections[]> {
   const allResults: ScrapedCourseSections[] = [];
+  const courses = await getCoursesBySubjectCode(subjectCode);
 
   for (let yearIndex = 0; yearIndex < YEAR_LABELS.length; yearIndex++) {
     console.log(`[scraper]       Year: ${YEAR_LABELS[yearIndex]}`);
@@ -102,26 +105,70 @@ async function scrapeSectionsByYear(
 
     const popup = await checkForPopup(page);
     if (popup === 'no_results') continue;
+    if (popup === 'too_many') {
+      console.log(`[scraper]       ${YEAR_LABELS[yearIndex]} year still >300 — falling back to course-by-course`);
+      const extra = await scrapeSectionsByCourse(page, termCode, subjectCode, courses, allResults);
+      mergeResults(allResults, extra);
+      continue;
+    }
+
+    const hasResults = await checkForResults(page);
+    if (!hasResults) continue;
+
+    mergeResults(allResults, await scrapeAllCourseGroups(page));
+  }
+
+  return allResults;
+}
+
+// Searches one course at a time for a subject that still exceeds 300 sections
+// even when filtered by year. Skips courses already captured in alreadyScraped.
+async function scrapeSectionsByCourse(
+  page: Page,
+  termCode: string,
+  subjectCode: string,
+  courses: { course_code: string }[],
+  alreadyScraped: ScrapedCourseSections[],
+): Promise<ScrapedCourseSections[]> {
+  const scraped = new Set(alreadyScraped.map(r => r.course_code));
+  const results: ScrapedCourseSections[] = [];
+
+  for (const { course_code } of courses) {
+    if (scraped.has(course_code)) continue;
+    const catalogNbr = course_code.replace(/\D/g, '');
+    await navigateToSearchPage(page);
+    await selectTerm(page, termCode);
+    await selectSubjectFromLookup(page, subjectCode);
+    await fillCatalogNumber(page, catalogNbr);
+    await uncheckOpenOnly(page);
+    await runSearch(page);
+    await waitForSearchRender(page);
+
+    const popup = await checkForPopup(page);
+    if (popup === 'no_results') continue;
     if (popup === 'too_many') continue;
 
     const hasResults = await checkForResults(page);
     if (!hasResults) continue;
 
-    const results = await scrapeAllCourseGroups(page);
-    for (const r of results) {
-      const existing = allResults.find(a => a.course_code === r.course_code);
-      if (existing) {
-        const seen = new Set(existing.sections.map(s => s.section_code));
-        for (const s of r.sections) {
-          if (!seen.has(s.section_code)) existing.sections.push(s);
-        }
-      } else {
-        allResults.push(r);
-      }
-    }
+    results.push(...await scrapeAllCourseGroups(page));
   }
 
-  return allResults;
+  return results;
+}
+
+function mergeResults(target: ScrapedCourseSections[], incoming: ScrapedCourseSections[]): void {
+  for (const r of incoming) {
+    const existing = target.find(a => a.course_code === r.course_code);
+    if (existing) {
+      const seen = new Set(existing.sections.map(s => s.section_code));
+      for (const s of r.sections) {
+        if (!seen.has(s.section_code)) existing.sections.push(s);
+      }
+    } else {
+      target.push(r);
+    }
+  }
 }
 
 // Returns false if the "no classes found" message is shown, or true if there
