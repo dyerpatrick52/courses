@@ -68,24 +68,27 @@ export async function generateSchedules(req: GenerateRequest): Promise<Formatted
   const perCourseCandidates: ScheduleSectionRow[][][] = [];
   for (const [, letterMap] of byCourseThenLetter) {
     const primaryCandidates: ScheduleSectionRow[][] = [];
-    const floatingCandidates: ScheduleSectionRow[][] = [];
+    const floatingByLetter: ScheduleSectionRow[][][] = [];
 
     for (const letterRows of letterMap.values()) {
       const hasLec = letterRows.some(r => r.component === 'LEC');
       if (hasLec) {
         primaryCandidates.push(...buildSectionGroupCandidates(letterRows));
       } else {
-        floatingCandidates.push(...buildSectionGroupCandidates(letterRows));
+        floatingByLetter.push(buildSectionGroupCandidates(letterRows));
       }
     }
 
     let candidates: ScheduleSectionRow[][];
-    if (floatingCandidates.length === 0) {
+    if (floatingByLetter.length === 0) {
       candidates = primaryCandidates;
-    } else if (primaryCandidates.length === 0) {
-      candidates = floatingCandidates;
     } else {
-      candidates = primaryCandidates.flatMap(p => floatingCandidates.map(f => [...p, ...f]));
+      const floatingCombined = cartesian(floatingByLetter);
+      if (primaryCandidates.length === 0) {
+        candidates = floatingCombined;
+      } else {
+        candidates = primaryCandidates.flatMap(p => floatingCombined.map(f => [...p, ...f]));
+      }
     }
 
     perCourseCandidates.push(candidates);

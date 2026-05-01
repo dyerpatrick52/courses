@@ -6,6 +6,7 @@ import { useTheme } from './utils/useTheme';
 import Sidebar from './components/Sidebar';
 import ScheduleViewer from './components/ScheduleViewer';
 import PrivacyModal from './components/PrivacyModal';
+import FeedbackModal from './components/FeedbackModal';
 
 export default function App() {
   const [schedules, setSchedules] = useState<FormattedSchedule[]>([]); // all schedules returned from the API
@@ -14,6 +15,7 @@ export default function App() {
   const [generated, setGenerated] = useState(false); // true once the user has clicked Generate at least once
   const { mode, cycle } = useTheme();
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   // initialize from localStorage so the disclaimer doesn't re-appear after the user dismisses it
   const [rmpDisclaimerOpen, setRmpDisclaimerOpen] = useState(() => !localStorage.getItem('rmpDisclaimerSeen'));
   const [sidebarOpen, setSidebarOpen] = useState(false); // controls the mobile drawer
@@ -101,7 +103,10 @@ export default function App() {
       )}
       <footer className="shrink-0 px-5 py-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-400
   dark:text-gray-600">
-        <button onClick={() => setPrivacyOpen(true)} className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">Privacy</button>
+        <span className="flex items-center gap-3">
+          <button onClick={() => setPrivacyOpen(true)} className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">Privacy</button>
+          <button onClick={() => setFeedbackOpen(true)} className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">Feedback</button>
+        </span>
         <span className="flex items-center gap-3">
           <a href="https://github.com/dyerpatrick52" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600 dark:hover:text-gray-400
   transition-colors">GitHub</a>
@@ -110,6 +115,7 @@ export default function App() {
         </span>
       </footer>
       {privacyOpen && <PrivacyModal onClose={() => setPrivacyOpen(false)} />}
+      {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
 
       {/* one-time disclaimer shown until the user clicks "Got it" — state persists in localStorage */}
       {rmpDisclaimerOpen && (

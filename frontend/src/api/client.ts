@@ -26,6 +26,15 @@ export async function fetchRmpRating(name: string): Promise<RmpResult> {
   return res.json();
 }
 
+export async function submitFeedback(message: string): Promise<void> {
+  const res = await fetch(`${BASE}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) throw new Error('Failed to submit feedback');
+}
+
 export async function generateSchedules(req: GenerateRequest): Promise<GenerateResponse> {
   const res = await fetch(`${BASE}/schedules/generate`, {
     method: 'POST',

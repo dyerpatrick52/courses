@@ -5,6 +5,7 @@ import { getCoursesBySubjectCode } from '../db/queries/courses';
 import { getSectionsByCourseCode } from '../db/queries/sections';
 import { generateSchedules, GenerateRequest } from './schedules';
 import { getRmpRating } from './rmp';
+import { insertFeedback } from '../db/queries/feedback';
 
 const app = express();
 app.use(express.json());
@@ -81,6 +82,22 @@ app.get('/rmp/rating', async (req, res, next) => {
       return;
     }
     res.json(await getRmpRating(name.trim()));
+  } catch (err) { next(err); }
+});
+
+app.post('/feedback', async (req, res, next) => {
+  try {
+    const { message } = req.body as { message?: string };
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      res.status(400).json({ error: 'message is required' });
+      return;
+    }
+    if (message.length > 2000) {
+      res.status(400).json({ error: 'message too long' });
+      return;
+    }
+    await insertFeedback(message.trim());
+    res.json({ ok: true });
   } catch (err) { next(err); }
 });
 

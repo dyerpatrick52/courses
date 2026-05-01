@@ -49,6 +49,12 @@ CREATE INDEX IF NOT EXISTS idx_courses_subject_id ON courses(subject_id);
 CREATE INDEX IF NOT EXISTS idx_sections_term_id   ON sections(term_id);
 CREATE INDEX IF NOT EXISTS idx_sections_course    ON sections(subject_code, course_code);
 
+CREATE TABLE IF NOT EXISTS feedback (
+  id         SERIAL PRIMARY KEY,
+  message    TEXT        NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS scrape_runs (
   id               SERIAL PRIMARY KEY,
   started_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
