@@ -324,6 +324,7 @@ export function parseDayTimes(s: string): Meeting[] {
     const trimmed = part.trim();
     if (!trimmed || trimmed === 'TBA' || trimmed === 'N/A') continue;
     const seg = trimmed.split(' ');
+    if (seg[0] === 'N/A') continue;
     meetings.push({ day: seg[0], start: timeToMinutes(seg[1]), end: timeToMinutes(seg[3]) });
   }
   return meetings;
