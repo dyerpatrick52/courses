@@ -86,10 +86,19 @@ export async function generateSchedules(req: GenerateRequest): Promise<Formatted
       // filter out floating combos where the selected sections conflict with each other
       // (e.g. PHY 1321 Y/DGD and Z/LAB both on Friday at overlapping times)
       const floatingCombined = cartesian(floatingByLetter).filter(combo => {
-        const meetings = combo.flatMap(r => parseDayTimes(r.days_times));
-        for (let i = 0; i < meetings.length; i++)
-          for (let j = i + 1; j < meetings.length; j++)
-            if (meetingsOverlap(meetings[i], meetings[j])) return false;
+        // only compare rows from different sections — rows sharing a section_code are
+        // multiple occurrences of the same meeting (e.g. alternating-week labs) and
+        // must not be checked against each other
+        for (let i = 0; i < combo.length; i++) {
+          for (let j = i + 1; j < combo.length; j++) {
+            if (combo[i].section_code === combo[j].section_code) continue;
+            const mi = parseDayTimes(combo[i].days_times);
+            const mj = parseDayTimes(combo[j].days_times);
+            for (const a of mi)
+              for (const b of mj)
+                if (meetingsOverlap(a, b)) return false;
+          }
+        }
         return true;
       });
       if (primaryCandidates.length === 0) {
