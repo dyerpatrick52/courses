@@ -62,10 +62,12 @@ function generateEvents(schedule: FormattedSchedule): { events: EventInput[]; ba
         const [eh, em] = m.end.split(':').map(Number);
         const color = getCourseColor(courseCode, m.component);
         const props = { component: m.component, section_code: m.section_code, instructor: course.instructor, courseCode, date_start: m.date_start, date_end: m.date_end };
-
+        
         if (multiOccurrence || m.date_start === m.date_end) {
           // explicit occurrence — portal gave us the real date in date_start; date_end is unreliable
           const date  = parseLocalDate(m.date_start);
+          const targetDay = DAY_MAP[m.day];
+          if (targetDay === undefined) continue;
           const start = new Date(date); start.setHours(sh, sm, 0, 0);
           const end   = new Date(date); end.setHours(eh, em, 0, 0);
           events.push({ title: courseCode, start, end, backgroundColor: color, borderColor: '#111827', extendedProps: props });
@@ -143,7 +145,7 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
   for (const course of Object.values(schedule)) {
     for (const m of course.meetings) {
       // skip N/A meetings (no valid time info) so they don't push the calendar view to midnight
-      if (!m.start || !m.end || (m.start === '00:00' && m.end === '00:00')) continue;
+      if (m.day === 'N/A' || !m.start || !m.end || (m.start === '00:00' || m.end === '00:00')) continue;
       const s = parseInt(m.start.split(':')[0]) * 60 + parseInt(m.start.split(':')[1]);
       const e = parseInt(m.end.split(':')[0]) * 60 + parseInt(m.end.split(':')[1]);
       if (s < minMins) minMins = s;
