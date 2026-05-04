@@ -46,6 +46,7 @@ export default function App() {
     for (const schedule of schedules) {
       for (const [courseCode, courseData] of Object.entries(schedule)) {
         for (const meeting of courseData.meetings) {
+          if (!meeting.date_start || !meeting.date_end) continue; // skip meetings with no date info yet
           if (!map[courseCode]) {
             map[courseCode] = { start: meeting.date_start, end: meeting.date_end };
           } else {

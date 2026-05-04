@@ -22,59 +22,69 @@ function parseLocalDate(dateStr: string): Date {
 }
 
 // turns the schedule object into a flat list of FullCalendar events.
-// each meeting in the schedule becomes one or more calendar events depending on whether
-// it's a single-day occurrence or a recurring weekly one.
-function generateEvents(schedule: FormattedSchedule): EventInput[] {
-  const events: EventInput[] = []; // start with an empty array we'll push into
+// also returns the set of course codes whose portal data had issues (missing dates or duplicate rows)
+// so the component can surface a warning banner.
+function generateEvents(schedule: FormattedSchedule): { events: EventInput[]; badCourses: Set<string> } {
+  const events: EventInput[] = [];
+  const badCourses = new Set<string>();
 
-  // Object.entries() turns the object into pairs of [key, value] — here [courseCode, course]
   for (const [courseCode, course] of Object.entries(schedule)) {
-    for (const m of course.meetings) {
-      // split "10:30" into ["10","30"], convert each to a number
-      const [sh, sm] = m.start.split(':').map(Number); // sh = start hour, sm = start minute
-      const [eh, em] = m.end.split(':').map(Number);   // eh = end hour,   em = end minute
+    // skip meetings with no date info — portal hasn't published dates yet for these sections
+    const validMeetings = course.meetings.filter(m => m.date_start && m.date_end);
+    if (validMeetings.length < course.meetings.length) badCourses.add(courseCode);
 
-      const color = getCourseColor(courseCode, m.component); // pick a consistent color for this course
+    // deduplicate: portal sometimes emits the same row multiple times
+    const seen = new Set<string>();
+    const dedupedMeetings = validMeetings.filter(m => {
+      const key = `${m.section_code}|${m.component}|${m.day}|${m.start}|${m.end}|${m.date_start}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (dedupedMeetings.length < validMeetings.length) badCourses.add(courseCode);
 
-      // group extra data we want accessible when the user clicks an event
-      const props = {
-        component:    m.component,
-        section_code: m.section_code,
-        instructor:   course.instructor,
-        courseCode,
-        date_start:   m.date_start,
-        date_end:     m.date_end,
-      };
+    // group by slot — 2+ unique date_starts for the same slot = per-occurrence rows from the portal
+    const groups = new Map<string, typeof course.meetings>();
+    for (const m of dedupedMeetings) {
+      const slotKey = `${m.section_code}|${m.component}|${m.day}|${m.start}|${m.end}`;
+      if (!groups.has(slotKey)) groups.set(slotKey, []);
+      groups.get(slotKey)!.push(m);
+    }
 
-      if (m.date_start === m.date_end) {
-        // one-off meeting (exam, lab replacement, etc.) — only happens on a single date
-        const date  = parseLocalDate(m.date_start);
-        const start = new Date(date); start.setHours(sh, sm, 0, 0); // set time on a copy of the date
-        const end   = new Date(date); end.setHours(eh, em, 0, 0);
-        events.push({ title: courseCode, start, end, backgroundColor: color, borderColor: '#111827', extendedProps: props });
-      } else {
-        // recurring weekly meeting — find every occurrence between date_start and date_end
-        const targetDay = DAY_MAP[m.day]; // e.g. "Tu" → 2 (JS day-of-week number)
-        if (targetDay === undefined) continue; // skip if the day string isn't recognised
+    for (const group of groups.values()) {
+      const multiOccurrence = group.length > 1;
 
-        const rangeEnd = parseLocalDate(m.date_end);
-        const cursor   = parseLocalDate(m.date_start); // cursor walks forward one week at a time
+      for (const m of group) {
+        const [sh, sm] = m.start.split(':').map(Number);
+        const [eh, em] = m.end.split(':').map(Number);
+        const color = getCourseColor(courseCode, m.component);
+        const props = { component: m.component, section_code: m.section_code, instructor: course.instructor, courseCode, date_start: m.date_start, date_end: m.date_end };
 
-        // advance cursor until it lands on the right weekday (e.g. skip Mon if we need Tue)
-        while (cursor.getDay() !== targetDay) cursor.setDate(cursor.getDate() + 1);
-
-        // now step forward 7 days at a time, adding one event per week
-        while (cursor <= rangeEnd) {
-          const start = new Date(cursor); start.setHours(sh, sm, 0, 0);
-          const end   = new Date(cursor); end.setHours(eh, em, 0, 0);
+        if (multiOccurrence || m.date_start === m.date_end) {
+          // explicit occurrence — portal gave us the real date in date_start; date_end is unreliable
+          const date  = parseLocalDate(m.date_start);
+          const start = new Date(date); start.setHours(sh, sm, 0, 0);
+          const end   = new Date(date); end.setHours(eh, em, 0, 0);
           events.push({ title: courseCode, start, end, backgroundColor: color, borderColor: '#111827', extendedProps: props });
-          cursor.setDate(cursor.getDate() + 7); // jump to next week
+        } else {
+          // single unique row — recurring weekly meeting
+          const targetDay = DAY_MAP[m.day];
+          if (targetDay === undefined) continue;
+          const rangeEnd = parseLocalDate(m.date_end);
+          const cursor   = parseLocalDate(m.date_start);
+          while (cursor.getDay() !== targetDay) cursor.setDate(cursor.getDate() + 1);
+          while (cursor <= rangeEnd) {
+            const start = new Date(cursor); start.setHours(sh, sm, 0, 0);
+            const end   = new Date(cursor); end.setHours(eh, em, 0, 0);
+            events.push({ title: courseCode, start, end, backgroundColor: color, borderColor: '#111827', extendedProps: props });
+            cursor.setDate(cursor.getDate() + 7);
+          }
         }
       }
     }
   }
 
-  return events;
+  return { events, badCourses };
 }
 
 // finds the earliest meeting date across all courses so we can scroll the calendar to the right week
@@ -82,11 +92,12 @@ function getInitialDate(schedule: FormattedSchedule): Date {
   let earliest: Date | null = null;
   for (const course of Object.values(schedule)) {
     for (const m of course.meetings) {
+      if (!m.date_start) continue; // skip meetings with no date info yet
       const d = parseLocalDate(m.date_start);
-      if (!earliest || d < earliest) earliest = d; // keep whichever is further in the past
+      if (!earliest || d < earliest) earliest = d;
     }
   }
-  return earliest ?? new Date(); // fall back to today if schedule is empty
+  return earliest ?? new Date();
 }
 
 interface Props {
@@ -119,7 +130,7 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
 
   if (!schedule) return null; // nothing to show yet
 
-  const events      = generateEvents(schedule);
+  const { events, badCourses } = generateEvents(schedule);
   const initialDate = getInitialDate(schedule);
   const isMobile = window.innerWidth < 768; // tailwind's `md` breakpoint
 
@@ -128,6 +139,8 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
   let maxMins = 22 * 60; // default: show until 22:00
   for (const course of Object.values(schedule)) {
     for (const m of course.meetings) {
+      // skip N/A meetings (no valid time info) so they don't push the calendar view to midnight
+      if (!m.start || !m.end || (m.start === '00:00' && m.end === '00:00')) continue;
       const s = parseInt(m.start.split(':')[0]) * 60 + parseInt(m.start.split(':')[1]);
       const e = parseInt(m.end.split(':')[0]) * 60 + parseInt(m.end.split(':')[1]);
       if (s < minMins) minMins = s;
@@ -144,8 +157,13 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
   }
 
   return (
-    <div className="h-full p-4">
-      <div className="h-full">
+    <div className="h-full p-4 flex flex-col">
+      {badCourses.size > 0 && (
+        <div className="mb-3 shrink-0 px-3 py-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 text-xs text-yellow-800 dark:text-yellow-300">
+          Schedule info for <span className="font-semibold">{[...badCourses].join(', ')}</span> may be incomplete — the uOttawa portal hasn't published all meeting dates yet.
+        </div>
+      )}
+      <div className="flex-1 min-h-0">
       <FullCalendar
         plugins={[timeGridPlugin]}
         initialView={isMobile ? 'timeGridThreeDay' : 'timeGridWeek'} // 3-day on mobile so everything fits the screen
@@ -190,6 +208,7 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
       </div>
     </div>
   );
+
 }
 
 // renders the content inside each calendar event block.
