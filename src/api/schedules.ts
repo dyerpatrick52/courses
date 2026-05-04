@@ -41,7 +41,7 @@ function parseCourseString(course: string): { subjectCode: string; courseCode: s
   if (lastSpace < 0) throw new Error(`Invalid course string: "${course}"`);
   return {
     subjectCode: course.slice(0, lastSpace).trim(),
-    courseCode:  course.slice(lastSpace + 1).trim(),
+    courseCode:  course.trim(),
   };
 }
 
@@ -257,7 +257,7 @@ function formatSchedule(schedule: ScheduleSectionRow[]): FormattedSchedule {
 export function groupByCourse(rows: ScheduleSectionRow[]):(Map<string, ScheduleSectionRow[]>){
     const map = new Map<string, ScheduleSectionRow[]>();
     for (const row of rows){
-        const key = `${row.subject_code} ${row.course_code}`;
+        const key = row.course_code;
         if (!map.has(key)) map.set(key, []);
         map.get(key)!.push(row);
     }
