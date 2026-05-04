@@ -29,9 +29,12 @@ function generateEvents(schedule: FormattedSchedule): { events: EventInput[]; ba
   const badCourses = new Set<string>();
 
   for (const [courseCode, course] of Object.entries(schedule)) {
-    // skip meetings with no date info — portal hasn't published dates yet for these sections
-    const validMeetings = course.meetings.filter(m => m.date_start && m.date_end);
-    if (validMeetings.length < course.meetings.length) badCourses.add(courseCode);
+    // skip N/A/TBA meetings silently — unrecognizable day means they can never render
+    const recognizableMeetings = course.meetings.filter(m => DAY_MAP[m.day] !== undefined);
+
+    // flag only if a renderable meeting is missing its dates (portal hasn't published them yet)
+    const validMeetings = recognizableMeetings.filter(m => m.date_start && m.date_end);
+    if (validMeetings.length < recognizableMeetings.length) badCourses.add(courseCode);
 
     // deduplicate: portal sometimes emits the same row multiple times
     const seen = new Set<string>();
