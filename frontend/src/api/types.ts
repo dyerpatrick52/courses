@@ -23,6 +23,7 @@ export interface ScheduleMeeting {
 export interface ScheduleCourse {
   instructor: string;
   meetings: ScheduleMeeting[];
+  async_sections: { section_code: string; component: string }[];
 }
 
 export type FormattedSchedule = Record<string, ScheduleCourse>;

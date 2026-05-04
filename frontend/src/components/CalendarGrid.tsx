@@ -135,6 +135,21 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
 
   const { events, badCourses } = generateEvents(schedule);
   const initialDate = getInitialDate(schedule);
+
+  // collect all async sections across courses for the info banner.
+  // flag as suspicious if another section of the same component in the same course has a real time.
+  const asyncEntries: { courseCode: string; section_code: string; component: string; suspicious: boolean }[] = [];
+  for (const [courseCode, course] of Object.entries(schedule)) {
+    const componentsWithTimes = new Set(course.meetings.map(m => m.component));
+    const seen = new Set<string>();
+    for (const s of course.async_sections ?? []) {
+      const key = `${courseCode}|${s.section_code}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        asyncEntries.push({ courseCode, ...s, suspicious: componentsWithTimes.has(s.component) });
+      }
+    }
+  }
   const isMobile = window.innerWidth < 768; // tailwind's `md` breakpoint
 
   // find the earliest start and latest end across all meetings so we can trim empty hours from the calendar
@@ -164,6 +179,21 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
       {badCourses.size > 0 && (
         <div className="mb-3 shrink-0 px-3 py-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 text-xs text-yellow-800 dark:text-yellow-300">
           Schedule info for <span className="font-semibold">{[...badCourses].join(', ')}</span> may be incomplete — the uOttawa portal hasn't published all meeting dates yet.
+        </div>
+      )}
+      {asyncEntries.length > 0 && (
+        <div className="mb-3 shrink-0 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 text-xs text-blue-800 dark:text-blue-300 space-y-1">
+          <div>
+            <span className="font-semibold">No fixed time</span> — the following sections have no scheduled meeting time and work with any schedule:{' '}
+            {asyncEntries.map((e, i) => (
+              <span key={i}>{i > 0 && ', '}<span className="font-semibold">{e.courseCode}</span> {e.section_code} ({e.component}){e.suspicious && ' ⚠️'}</span>
+            ))}
+          </div>
+          {asyncEntries.some(e => e.suspicious) && (
+            <div className="text-yellow-700 dark:text-yellow-400">
+              ⚠️ Sections marked with ⚠️ have no time listed, but other sections of the same type in that course do. This may be a data issue — verify on the <a href="https://uocampus.public.uottawa.ca/psc/csprpr9pub/EMPLOYEE/SA/c/UO_SR_AA_MODS.UO_PUB_CLSSRCH.GBL" target="_blank" rel="noopener noreferrer" className="underline">uOttawa portal</a> before registering.
+            </div>
+          )}
         </div>
       )}
       <div className="flex-1 min-h-0">

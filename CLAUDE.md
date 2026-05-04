@@ -32,6 +32,22 @@ docker compose run --rm scraper node -e "require('./dist/scraper').runSections()
 docker compose logs -f scraper
 ```
 
+## Accessing the Server
+
+SSH as root (use your SSH key passphrase when prompted):
+
+```bash
+ssh root@<server-ip>
+```
+
+To view the database via pgAdmin, open an SSH tunnel first:
+
+```bash
+ssh -L 5432:localhost:5432 root@<server-ip>
+```
+
+Then connect pgAdmin to `localhost:5432` with username `postgres`.
+
 ## Deploying to Server
 
 SSH into the server, then:

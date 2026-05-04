@@ -29,6 +29,7 @@ export interface ScheduleMeeting {
 export interface ScheduleCourse {
   instructor: string;
   meetings: ScheduleMeeting[];
+  async_sections: { section_code: string; component: string }[];
 }
 
 export type FormattedSchedule = Record<string, ScheduleCourse>;
@@ -40,7 +41,7 @@ function parseCourseString(course: string): { subjectCode: string; courseCode: s
   if (lastSpace < 0) throw new Error(`Invalid course string: "${course}"`);
   return {
     subjectCode: course.slice(0, lastSpace).trim(),
-    courseCode:  course.trim(),
+    courseCode:  course.slice(lastSpace + 1).trim(),
   };
 }
 
@@ -225,21 +226,29 @@ function formatSchedule(schedule: ScheduleSectionRow[]): FormattedSchedule {
     const courseKey = row.course_code;
     if (!result[courseKey]) {
       result[courseKey] = {
-        instructor: row.instructor,
-        meetings:   [],
+        instructor:     row.instructor,
+        meetings:       [],
+        async_sections: [],
       };
     }
     const parsed = parseDayTimes(row.days_times);
-    for (const m of parsed) {
-      result[courseKey].meetings.push({
-        day:          m.day,
-        start:        row.days_times.split(' ')[1],
-        end:          row.days_times.split(' ')[3],
-        component:    row.component,
+    if (parsed.length === 0) {
+      result[courseKey].async_sections.push({
         section_code: row.section_code,
-        date_start:   row.date_start,
-        date_end:     row.date_end,
+        component:    row.component,
       });
+    } else {
+      for (const m of parsed) {
+        result[courseKey].meetings.push({
+          day:          m.day,
+          start:        minutesToTime(m.start),
+          end:          minutesToTime(m.end),
+          component:    row.component,
+          section_code: row.section_code,
+          date_start:   row.date_start,
+          date_end:     row.date_end,
+        });
+      }
     }
   }
   return result;
@@ -309,9 +318,21 @@ export function timeToMinutes(t: string):(number){
 }
 
 export function parseDayTimes(s: string): Meeting[] {
-  if (!s || s.trim() === 'TBA') return [];
-  const splitString = s.split(" ");
-  return [{ day: splitString[0], start: timeToMinutes(splitString[1]), end: timeToMinutes(splitString[3]) }];
+  if (!s || s.trim() === 'TBA' || s.trim() === 'N/A') return [];
+  const meetings: Meeting[] = [];
+  for (const part of s.split(' | ')) {
+    const trimmed = part.trim();
+    if (!trimmed || trimmed === 'TBA' || trimmed === 'N/A') continue;
+    const seg = trimmed.split(' ');
+    meetings.push({ day: seg[0], start: timeToMinutes(seg[1]), end: timeToMinutes(seg[3]) });
+  }
+  return meetings;
+}
+
+function minutesToTime(mins: number): string {
+  const h = Math.floor(mins / 60).toString().padStart(2, '0');
+  const m = (mins % 60).toString().padStart(2, '0');
+  return `${h}:${m}`;
 }
 
 export function meetingsOverlap(a: Meeting, b: Meeting):(boolean){
