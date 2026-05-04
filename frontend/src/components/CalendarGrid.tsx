@@ -143,7 +143,7 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
   for (const course of Object.values(schedule)) {
     for (const m of course.meetings) {
       // skip N/A meetings (no valid time info) so they don't push the calendar view to midnight
-      if (!m.start || !m.end || (m.start === '00:00' && m.end === '00:00')) continue;
+      if (m.day === "N/A" || !m.start || !m.end || (m.start === '00:00' || m.end === '00:00')) continue;
       const s = parseInt(m.start.split(':')[0]) * 60 + parseInt(m.start.split(':')[1]);
       const e = parseInt(m.end.split(':')[0]) * 60 + parseInt(m.end.split(':')[1]);
       if (s < minMins) minMins = s;
