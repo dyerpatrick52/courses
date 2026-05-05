@@ -137,16 +137,16 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
   const initialDate = getInitialDate(schedule);
 
   // collect all async sections across courses for the info banner.
-  // flag as suspicious if another section of the same component in the same course has a real time.
+  // suspicious flag comes from the backend: true if other sections with the same letter prefix
+  // and component (e.g. Z01-Z05 of the same LAB) have real times, suggesting a data issue.
   const asyncEntries: { courseCode: string; section_code: string; component: string; suspicious: boolean }[] = [];
   for (const [courseCode, course] of Object.entries(schedule)) {
-    const componentsWithTimes = new Set(course.meetings.map(m => m.component));
     const seen = new Set<string>();
     for (const s of course.async_sections ?? []) {
       const key = `${courseCode}|${s.section_code}`;
       if (!seen.has(key)) {
         seen.add(key);
-        asyncEntries.push({ courseCode, ...s, suspicious: componentsWithTimes.has(s.component) });
+        asyncEntries.push({ courseCode, ...s, suspicious: s.suspicious ?? false });
       }
     }
   }
@@ -191,7 +191,7 @@ export default function CalendarGrid({ schedule, courseNames }: Props) {
           </div>
           {asyncEntries.some(e => e.suspicious) && (
             <div className="text-yellow-700 dark:text-yellow-400">
-              ⚠️ Sections marked with ⚠️ have no time listed, but other sections of the same type in that course do. This may be a data issue — verify on the <a href="https://uocampus.public.uottawa.ca/psc/csprpr9pub/EMPLOYEE/SA/c/UO_SR_AA_MODS.UO_PUB_CLSSRCH.GBL" target="_blank" rel="noopener noreferrer" className="underline">uOttawa portal</a> before registering.
+              ⚠️ Sections marked with ⚠️ have no time listed, but other sections with the same letter prefix do (e.g. Z06 has no time while Z01–Z05 do). This is likely a data issue — verify on the <a href="https://uocampus.public.uottawa.ca/psc/csprpr9pub/EMPLOYEE/SA/c/UO_SR_AA_MODS.UO_PUB_CLSSRCH.GBL" target="_blank" rel="noopener noreferrer" className="underline">uOttawa portal</a> before registering.
             </div>
           )}
         </div>

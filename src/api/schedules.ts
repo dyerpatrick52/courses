@@ -29,7 +29,7 @@ export interface ScheduleMeeting {
 export interface ScheduleCourse {
   instructor: string;
   meetings: ScheduleMeeting[];
-  async_sections: { section_code: string; component: string }[];
+  async_sections: { section_code: string; component: string; suspicious?: boolean }[];
 }
 
 export type FormattedSchedule = Record<string, ScheduleCourse>;
@@ -136,7 +136,7 @@ export async function generateSchedules(req: GenerateRequest): Promise<Formatted
   }
 
 
-  return validSchedules.map(formatSchedule);
+  return validSchedules.map(s => markSuspiciousAsync(formatSchedule(s), rows));
 
 }
 
@@ -218,6 +218,28 @@ export function hasThreeInRow(schedule: ScheduleSectionRow[]):boolean{
     }
   }
   return false;
+}
+
+function markSuspiciousAsync(formatted: FormattedSchedule, allRows: ScheduleSectionRow[]): FormattedSchedule {
+  // For each (courseCode, letterPrefix, component), track whether any section has real meeting times
+  const hasTimes = new Map<string, boolean>();
+  for (const row of allRows) {
+    const letter = row.section_code.match(/^[A-Za-z]+/)?.[0] ?? row.section_code;
+    const key = `${row.course_code}|${letter}|${row.component}`;
+    if (parseDayTimes(row.days_times).length > 0) {
+      hasTimes.set(key, true);
+    } else if (!hasTimes.has(key)) {
+      hasTimes.set(key, false);
+    }
+  }
+  for (const [courseCode, course] of Object.entries(formatted)) {
+    for (const s of course.async_sections) {
+      const letter = s.section_code.match(/^[A-Za-z]+/)?.[0] ?? s.section_code;
+      const key = `${courseCode}|${letter}|${s.component}`;
+      s.suspicious = hasTimes.get(key) ?? false;
+    }
+  }
+  return formatted;
 }
 
 function formatSchedule(schedule: ScheduleSectionRow[]): FormattedSchedule {
