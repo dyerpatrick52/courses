@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import type { FormattedSchedule } from '../api/types';
+import type { FormattedSchedule, ConflictInfo } from '../api/types';
 import CalendarGrid from './CalendarGrid';
 import ScheduleStats from './ScheduleStats';
 import { computeStats } from '../utils/scheduleStats';
@@ -8,12 +8,22 @@ import { exportIcs } from '../utils/exportIcs';
 // the keys the user can sort schedules by
 type SortKey = 'default' | 'fewest-days' | 'least-gap' | 'earliest-end' | 'latest-start';
 
+const FILTER_LABELS: Record<string, string> = {
+  free_days:      'free-day preference',
+  earliest_start: 'earliest start time',
+  latest_end:     'latest end time',
+  blocked_times:  'blocked time slots',
+  no_back_to_back:'no back-to-back classes',
+  no_three_in_row:'no three classes in a row',
+};
+
 interface Props {
   schedules: FormattedSchedule[];
-  courseNames: Record<string, string>; // maps course code → full course title, passed down to the calendar
+  courseNames: Record<string, string>;
+  conflicts: ConflictInfo[];
 }
 
-export default function ScheduleViewer({ schedules, courseNames }: Props) {
+export default function ScheduleViewer({ schedules, courseNames, conflicts }: Props) {
   const [index, setIndex] = useState(0);        // which schedule is currently shown (0-based)
   const [inputVal, setInputVal] = useState('1'); // the text in the number input (1-based for display)
   const [sortKey, setSortKey] = useState<SortKey>('default');
@@ -50,9 +60,25 @@ export default function ScheduleViewer({ schedules, courseNames }: Props) {
   // show a message if no schedules were generated (e.g. filters too strict)
   if (total === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-500">
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-500 px-6">
         <span className="text-3xl">📭</span>
-        <p className="text-sm">No valid schedules found. Try adjusting your filters.</p>
+        <p className="text-sm">No valid schedules found.</p>
+        {conflicts.length > 0 && (
+          <ul className="text-xs text-left space-y-1 max-w-sm">
+            {conflicts.map((c, i) => (
+              <li key={i} className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded px-3 py-2 text-red-700 dark:text-red-400">
+                {c.type === 'course_conflict'
+                  ? `${c.courses.join(' and ')} always conflict — no section combination avoids overlap.`
+                  : c.courses.length === 1
+                    ? `${c.courses[0]} has no sections that satisfy your ${FILTER_LABELS[c.filter!] ?? c.filter}.`
+                    : `Your ${FILTER_LABELS[c.filter!] ?? c.filter} filter eliminated all remaining schedules.`}
+              </li>
+            ))}
+          </ul>
+        )}
+        {conflicts.length === 0 && (
+          <p className="text-xs">Try adjusting your filters.</p>
+        )}
       </div>
     );
   }

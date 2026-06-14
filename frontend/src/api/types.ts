@@ -42,7 +42,14 @@ export interface GenerateRequest {
   };
 }
 
+export interface ConflictInfo {
+  type: 'course_conflict' | 'filter_violation';
+  courses: string[];
+  filter?: string;
+}
+
 export interface GenerateResponse {
   count: number;
   schedules: FormattedSchedule[];
+  conflicts: ConflictInfo[];
 }

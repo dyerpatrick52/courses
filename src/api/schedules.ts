@@ -45,7 +45,18 @@ function parseCourseString(course: string): { subjectCode: string; courseCode: s
   };
 }
 
-export async function generateSchedules(req: GenerateRequest): Promise<FormattedSchedule[]> {
+export interface ConflictInfo {
+  type: 'course_conflict' | 'filter_violation';
+  courses: string[];
+  filter?: string;
+}
+
+export interface GenerateResult {
+  schedules: FormattedSchedule[];
+  conflicts: ConflictInfo[];
+}
+
+export async function generateSchedules(req: GenerateRequest): Promise<GenerateResult> {
   // Step 1 — Parse course strings and fetch all section rows in one query.
   const pairs = req.courses.map(parseCourseString);
   const rows = await getSectionsForCourses(req.term_code, pairs);
@@ -66,27 +77,38 @@ export async function generateSchedules(req: GenerateRequest): Promise<Formatted
 
     byCourseThenLetter.set(courseKey, letterMap);
   }
+
+  const courseKeys: string[] = [];
   const perCourseCandidates: ScheduleSectionRow[][][] = [];
-  for (const [, letterMap] of byCourseThenLetter) {
+  for (const [courseKey, letterMap] of byCourseThenLetter) {
+    courseKeys.push(courseKey);
     const primaryCandidates: ScheduleSectionRow[][] = [];
-    const floatingByLetter: ScheduleSectionRow[][][] = [];
+    // Group non-LEC sections by component type: same type = alternatives (pick one),
+    // different types = complements (need one of each, e.g. LAB + DGD).
+    // Grouping by letter was wrong for courses like APA 2314 where M/N/O are all LABs.
+    const floatingByComponent = new Map<string, ScheduleSectionRow[][]>();
 
     for (const letterRows of letterMap.values()) {
       const hasLec = letterRows.some(r => r.component === 'LEC');
       if (hasLec) {
         primaryCandidates.push(...buildSectionGroupCandidates(letterRows));
       } else {
-        floatingByLetter.push(buildSectionGroupCandidates(letterRows));
+        const component = letterRows[0].component;
+        if (!floatingByComponent.has(component)) floatingByComponent.set(component, []);
+        floatingByComponent.get(component)!.push(...buildSectionGroupCandidates(letterRows));
       }
     }
 
+    // Each map entry is one component type; cartesian combines across types.
+    const floatingGroups: ScheduleSectionRow[][][] = [...floatingByComponent.values()];
+
     let candidates: ScheduleSectionRow[][];
-    if (floatingByLetter.length === 0) {
+    if (floatingGroups.length === 0) {
       candidates = primaryCandidates;
     } else {
       // filter out floating combos where the selected sections conflict with each other
       // (e.g. PHY 1321 Y/DGD and Z/LAB both on Friday at overlapping times)
-      const floatingCombined = cartesian(floatingByLetter).filter(combo => {
+      const floatingCombined = cartesian(floatingGroups).filter(combo => {
         // only compare rows from different sections — rows sharing a section_code are
         // multiple occurrences of the same meeting (e.g. alternating-week labs) and
         // must not be checked against each other
@@ -125,6 +147,8 @@ export async function generateSchedules(req: GenerateRequest): Promise<Formatted
     validSchedules = next;
   }
 
+  const preFilterCount = validSchedules.length;
+
   if (req.filters) {
     const { free_days, no_back_to_back, no_three_in_row, earliest_start, latest_end, blocked_times } = req.filters;
     if (free_days?.length)        validSchedules = validSchedules.filter(s => !hasMeetingsOnDays(s, free_days));
@@ -135,9 +159,68 @@ export async function generateSchedules(req: GenerateRequest): Promise<Formatted
     if (blocked_times?.length)    validSchedules = validSchedules.filter(s => !hasBlockedTime(s, blocked_times));
   }
 
+  const conflicts = validSchedules.length === 0
+    ? diagnoseConflicts(courseKeys, perCourseCandidates, preFilterCount, req.filters)
+    : [];
 
-  return validSchedules.map(s => markSuspiciousAsync(formatSchedule(s), rows));
+  return {
+    schedules: validSchedules.map(s => markSuspiciousAsync(formatSchedule(s), rows)),
+    conflicts,
+  };
+}
 
+function diagnoseConflicts(
+  courseKeys: string[],
+  perCourseCandidates: ScheduleSectionRow[][][],
+  preFilterCount: number,
+  filters: GenerateRequest['filters'],
+): ConflictInfo[] {
+  if (preFilterCount === 0) {
+    // Find pairs of courses whose sections always overlap — no valid combination exists for them.
+    const conflicts: ConflictInfo[] = [];
+    for (let i = 0; i < courseKeys.length; i++) {
+      for (let j = i + 1; j < courseKeys.length; j++) {
+        const hasValidCombo = perCourseCandidates[i].some(a =>
+          perCourseCandidates[j].some(b => !conflictsWithPartial(b, a))
+        );
+        if (!hasValidCombo) {
+          conflicts.push({ type: 'course_conflict', courses: [courseKeys[i], courseKeys[j]] });
+        }
+      }
+    }
+    return conflicts;
+  }
+
+  if (!filters) return [];
+
+  // Filters eliminated all schedules. Find which course(s) make each per-course filter impossible.
+  const conflicts: ConflictInfo[] = [];
+  const { free_days, earliest_start, latest_end, blocked_times, no_back_to_back, no_three_in_row } = filters;
+
+  for (let i = 0; i < courseKeys.length; i++) {
+    const candidates = perCourseCandidates[i];
+    if (free_days?.length && candidates.every(c => hasMeetingsOnDays(c, free_days))) {
+      conflicts.push({ type: 'filter_violation', courses: [courseKeys[i]], filter: 'free_days' });
+    }
+    if (earliest_start && candidates.every(c => hasStartBefore(c, earliest_start))) {
+      conflicts.push({ type: 'filter_violation', courses: [courseKeys[i]], filter: 'earliest_start' });
+    }
+    if (latest_end && candidates.every(c => hasEndAfter(c, latest_end))) {
+      conflicts.push({ type: 'filter_violation', courses: [courseKeys[i]], filter: 'latest_end' });
+    }
+    if (blocked_times?.length && candidates.every(c => hasBlockedTime(c, blocked_times))) {
+      conflicts.push({ type: 'filter_violation', courses: [courseKeys[i]], filter: 'blocked_times' });
+    }
+  }
+
+  // back-to-back / three-in-row depend on combinations, not individual courses.
+  // Only surface them if no per-course violation explains the failure.
+  if (conflicts.length === 0) {
+    if (no_back_to_back) conflicts.push({ type: 'filter_violation', courses: courseKeys, filter: 'no_back_to_back' });
+    if (no_three_in_row) conflicts.push({ type: 'filter_violation', courses: courseKeys, filter: 'no_three_in_row' });
+  }
+
+  return conflicts;
 }
 
 export function hasMeetingsOnDays(schedule: ScheduleSectionRow[], days: string[]): boolean {

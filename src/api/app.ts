@@ -60,8 +60,8 @@ app.post('/schedules/generate', async (req, res, next) => {
       res.status(400).json({error: 'term code and at least one course required'});
       return;
     }
-    const schedules = await generateSchedules(body);
-    res.json({count: schedules.length, schedules});
+    const result = await generateSchedules(body);
+    res.json({ count: result.schedules.length, schedules: result.schedules, conflicts: result.conflicts });
 
 
    } catch (err) {

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import type { FormattedSchedule, GenerateRequest } from './api/types';
+import type { FormattedSchedule, GenerateRequest, ConflictInfo } from './api/types';
 import { generateSchedules } from './api/client';
 import { resetCourseColors } from './utils/colors';
 import { useTheme } from './utils/useTheme';
@@ -9,7 +9,8 @@ import PrivacyModal from './components/PrivacyModal';
 import FeedbackModal from './components/FeedbackModal';
 
 export default function App() {
-  const [schedules, setSchedules] = useState<FormattedSchedule[]>([]); // all schedules returned from the API
+  const [schedules, setSchedules] = useState<FormattedSchedule[]>([]);
+  const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [generated, setGenerated] = useState(false); // true once the user has clicked Generate at least once
@@ -68,6 +69,7 @@ export default function App() {
     try {
       const res = await generateSchedules(req);
       setSchedules(res.schedules);
+      setConflicts(res.conflicts ?? []);
       setGenerated(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -95,7 +97,7 @@ export default function App() {
 
       {/* show the schedule viewer if the user has generated schedules, otherwise show the placeholder */}
       {generated ? (
-        <ScheduleViewer schedules={schedules} courseNames={courseNames} />
+        <ScheduleViewer schedules={schedules} courseNames={courseNames} conflicts={conflicts} />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400 dark:text-gray-600">
           <span className="text-5xl">🗓️</span>
