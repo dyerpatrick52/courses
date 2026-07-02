@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { FormattedSchedule, GenerateRequest, ConflictInfo } from './api/types';
 import { generateSchedules } from './api/client';
 import { resetCourseColors } from './utils/colors';
@@ -9,6 +9,13 @@ import PrivacyModal from './components/PrivacyModal';
 import FeedbackModal from './components/FeedbackModal';
 
 export default function App() {
+  useEffect(() => {
+    const start = Date.now();
+    const onUnload = () => window.umami?.track('session-end', { secondsSpent: Math.round((Date.now() - start) / 1000) });
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, []);
+
   const [schedules, setSchedules] = useState<FormattedSchedule[]>([]);
   const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
   const [loading, setLoading]     = useState(false);

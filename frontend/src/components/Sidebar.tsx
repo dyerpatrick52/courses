@@ -174,11 +174,17 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
     setSuggestions(allCourses.filter(c => c.toUpperCase().includes(q) || (courseNames[c] ?? '').toUpperCase().includes(q)).slice(0, 8));
   }
 
-  function clearCourses() { setSelected([]); }
+  function clearCourses() {
+    window.umami?.track('courses-cleared', { count: selectedCourses.length });
+    setSelected([]);
+  }
 
   // adds a course to the selected list (if not already there) and resets the search input
   function addCourse(code: string) {
-    if (!selectedCourses.includes(code)) setSelected(prev => [...prev, code]);
+    if (!selectedCourses.includes(code)) {
+      window.umami?.track('course-added', { course: code, term: termCode });
+      setSelected(prev => [...prev, code]);
+    }
     setQuery('');
     setSuggestions([]);
     inputRef.current?.focus(); // bring focus back to the input so the user can keep searching
@@ -186,6 +192,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
 
   // removes a course from the selected list using filter (returns a new array without the removed item)
   function removeCourse(code: string) {
+    window.umami?.track('course-removed', { course: code });
     setSelected(prev => prev.filter(c => c !== code));
   }
 
@@ -230,6 +237,16 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
       },
     };
     window.history.replaceState(null, '', buildUrl(req)); // update the URL without a full page reload
+    window.umami?.track('generate-schedules', {
+      courses: selectedCourses.length,
+      term: termCode,
+      ...(freeDays.length && { freeDays: freeDays.length }),
+      ...(noB2B && { noB2B: true }),
+      ...(no3Row && { no3Row: true }),
+      ...(earliestStart && { earliestStart }),
+      ...(latestEnd && { latestEnd }),
+      ...(blockedTimes.length && { blockedTimes: blockedTimes.length }),
+    });
     onGenerate(req);
   }
 
@@ -269,7 +286,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
           <select
             className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-red-700"
             value={termCode}
-            onChange={e => setTermCode(e.target.value)}
+            onChange={e => { window.umami?.track('term-changed', { term: e.target.value }); setTermCode(e.target.value); }}
           >
             {terms.map(t => (
               <option key={t.term_code} value={t.term_code}>{t.term_name}</option>
@@ -502,6 +519,7 @@ export default function Sidebar({ onGenerate, loading, error, themeMode, onTheme
         <button
           onClick={() => {
             navigator.clipboard.writeText(window.location.href); // copy the current URL (with query params) to clipboard
+            window.umami?.track('copy-link', { courses: selectedCourses.length });
             setCopied(true);
             setTimeout(() => setCopied(false), 2000); // revert button text after 2 seconds
           }}

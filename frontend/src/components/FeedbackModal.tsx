@@ -17,6 +17,7 @@ export default function FeedbackModal({ onClose }: Props) {
     setError(null);
     try {
       await submitFeedback(message.trim());
+      window.umami?.track('feedback-submitted');
       setSubmitted(true);
     } catch {
       setError('Failed to send — please try again.');

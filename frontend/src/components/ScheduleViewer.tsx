@@ -127,14 +127,14 @@ export default function ScheduleViewer({ schedules, courseNames, conflicts }: Pr
           {/* Export buttons */}
           <div className="ml-auto flex items-center gap-1.5">
             <button
-              onClick={() => exportIcs(current!)} // triggers an .ics file download
+              onClick={() => { exportIcs(current!); window.umami?.track('export-ics'); }}
               title="Export to calendar (.ics)"
               className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs font-medium"
             >
               ICS
             </button>
             <button
-              onClick={() => window.print()} // browser's built-in print/save-as-PDF dialog
+              onClick={() => { window.print(); window.umami?.track('export-pdf'); }}
               title="Print / Save as PDF"
               className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs font-medium"
             >
@@ -146,7 +146,7 @@ export default function ScheduleViewer({ schedules, courseNames, conflicts }: Pr
         {/* Row 2 on mobile: sort dropdown full width */}
         <select
           value={sortKey}
-          onChange={e => setSortKey(e.target.value as SortKey)}
+          onChange={e => { window.umami?.track('sort-changed', { sort: e.target.value }); setSortKey(e.target.value as SortKey); }}
           className="w-full sm:w-auto bg-transparent border border-gray-200 dark:border-gray-700 rounded-md px-2 py-0.5 text-xs text-gray-600 dark:text-gray-300 focus:outline-none focus:border-red-700"
         >
           <option value="default">Default order</option>
